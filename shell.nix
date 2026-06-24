@@ -5,9 +5,11 @@ pkgs.mkShell {
   packages = with pkgs; [
     (python314.withPackages (
       ps: with ps; [
-        opencv-contrib-python
+        numpy
         fastapi
         fastapi-cli
+        opencv4
+        matplotlib
       ]
     ))
   ];
