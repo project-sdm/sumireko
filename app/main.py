@@ -13,6 +13,8 @@ import numpy as np
 import numpy.typing as npt
 from cv2.typing import MatLike
 from fastapi import FastAPI, HTTPException, Request, UploadFile
+from fastapi.middleware.cors import CORSMiddleware
+from fastapi.staticfiles import StaticFiles
 from starlette.datastructures import State
 
 import common.image
@@ -77,6 +79,20 @@ async def lifespan(app: FastAPI):
 
 app = FastAPI(lifespan=lifespan)
 
+app.mount(
+    "/fashion-dataset/images",
+    StaticFiles(directory="fashion-dataset/images"),
+    name="static",
+)
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins="*",
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+
 
 @app.get("/")
 async def health():
@@ -128,21 +144,4 @@ async def image_search(req: Request, file: UploadFile):
     result = sorted(scores.items(), key=lambda tup: tup[1], reverse=True)
     top_files = [data.image_files[i] for i, _ in result[:5]]
 
-    _, axes = plt.subplots(1, 6, figsize=(18, 4))
-
-    q_img_color = cv2.imdecode(q_nparr, cv2.IMREAD_COLOR_RGB)
-    axes[0].imshow(q_img_color)
-    axes[0].set_title("Query")
-    axes[0].axis("off")
-
-    for i, img_path in enumerate(top_files):
-        img = cv2.imread(img_path, cv2.IMREAD_COLOR_RGB)
-
-        axes[i + 1].imshow(img)
-        axes[i + 1].set_title(f"Top {i + 1}")
-        axes[i + 1].axis("off")
-
-    plt.tight_layout()
-    plt.show()
-
-    return {"status": "ok"}
+    return {"results": [f"{path}" for path in top_files]}
