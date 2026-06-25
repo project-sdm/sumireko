@@ -1,8 +1,10 @@
+import json
 import logging
 import math
-import os
 from contextlib import asynccontextmanager
 from dataclasses import dataclass
+from pathlib import Path
+from typing import cast
 
 import cv2
 import faiss
@@ -11,18 +13,16 @@ import numpy as np
 import numpy.typing as npt
 from cv2.typing import MatLike
 from fastapi import FastAPI, HTTPException, Request, UploadFile
+from starlette.datastructures import State
 
-IMAGES_DIR = "fashion-dataset/images"
-VBOW_LEN = 500
-KMEANS_ITER = 100
+import common.image
 
-
-type Point = npt.NDArray[np.float32]
+PREPROCESSED_DIR = Path(".data/images")
 
 
-def histogram(index: faiss.IndexFlatL2, centroids: MatLike, descriptors: MatLike):
-    _, labels = index.search(descriptors, 1)
-    return np.bincount(labels.ravel(), minlength=len(centroids))
+@dataclass
+class AppState(State):
+    data: PreprocessedData
 
 
 @dataclass
@@ -30,84 +30,39 @@ class PreprocessedData:
     sift: cv2.SIFT
     image_files: list[str]
     word_index: faiss.IndexFlatL2
-    centroids: MatLike
+    words: MatLike
     index: list[list[tuple[int, float]]]
-    df: np.ndarray
-    lengths: np.ndarray
-
-
-def unwrap[T](val: T | None) -> T:
-    assert val is not None
-    return val
+    df: npt.NDArray[np.float32]
+    lengths: npt.NDArray[np.float32]
 
 
 logger = logging.getLogger("uvicorn.error")
 
 
-def preprocess() -> PreprocessedData:
-    sift = cv2.SIFT.create()
+def load_preprocessed() -> PreprocessedData:
+    logger.info("[IMAGE] Loading preprocessed data...")
 
-    image_files = os.listdir(IMAGES_DIR)[:100]
-    logger.info(f"[IMAGE] Listed {len(image_files)} images")
+    words = np.load(f"{PREPROCESSED_DIR}/words.npy")
+    df = np.load(f"{PREPROCESSED_DIR}/df.npy")
+    lengths = np.load(f"{PREPROCESSED_DIR}/lengths.npy")
 
-    logger.info("[IMAGE] Reading dataset images...")
-    imgs = [unwrap(cv2.imread(f"{IMAGES_DIR}/{file}")) for file in image_files]
-
-    n = len(image_files)
-
-    logger.info("[IMAGE] Extracting features...")
-    data = [sift.detectAndCompute(img, None) for img in imgs]
-
-    points = np.vstack([desc for _, desc in data]).astype(np.float32)
-
-    logger.info(f"[IMAGE] Clustering... (k = {VBOW_LEN}, niter = {KMEANS_ITER})")
-    kmeans = faiss.Kmeans(
-        points.shape[1], VBOW_LEN, niter=KMEANS_ITER, gpu=True, verbose=True
+    word_index: faiss.IndexFlatL2 = faiss.read_index(
+        f"{PREPROCESSED_DIR}/word_index.faiss"
     )
-    kmeans.train(points)
-    centroids = kmeans.centroids
-    assert centroids is not None
 
-    word_index = faiss.IndexFlatL2(centroids.shape[1])
-    word_index.add(centroids)
+    with open(f"{PREPROCESSED_DIR}/image_files.json") as f:
+        image_files = json.load(f)
 
-    logger.info("[IMAGE] Computing histograms...")
-    hists = [histogram(word_index, centroids, desc) for _, desc in data]
+    with open(f"{PREPROCESSED_DIR}/index.json") as f:
+        index = json.load(f)
 
-    logger.info("[IMAGE] Building inverted index...")
-
-    df = np.zeros(VBOW_LEN)
-
-    for hist in hists:
-        for word_id, tf in enumerate(hist):
-            if tf > 0:
-                df[word_id] += 1
-
-    index: list[list[tuple[int, float]]] = [[] for _ in range(VBOW_LEN)]
-    lengths = np.zeros(n)
-
-    def weight(word_id: int, tf: int) -> float:
-        return math.log(1 + tf) * math.log((n + 1) / (df[word_id] + 1))
-
-    for img_id, hist in enumerate(hists):
-        for word_id, tf in enumerate(hist):
-            if tf == 0:
-                continue
-
-            w = weight(word_id, tf)
-            lengths[img_id] += w**2
-            index[word_id].append((img_id, w))
-
-    for img_id in range(n):
-        lengths[img_id] = math.sqrt(lengths[img_id])
-
-    logger.info("[IMAGE] Done.")
+    logger.info(f"[IMAGE] Loaded {len(image_files)} images, {len(words)} visual words.")
 
     return PreprocessedData(
-        sift=sift,
+        sift=cv2.SIFT.create(),
         image_files=image_files,
         word_index=word_index,
-        centroids=centroids,
+        words=words,
         index=index,
         df=df,
         lengths=lengths,
@@ -116,7 +71,7 @@ def preprocess() -> PreprocessedData:
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    app.state.data = preprocess()
+    app.state.data = load_preprocessed()
     yield
 
 
@@ -129,8 +84,9 @@ async def health():
 
 
 @app.post("/image-search")
-async def sift(req: Request, file: UploadFile):
-    data: PreprocessedData = req.app.state.data
+async def image_search(req: Request, file: UploadFile):
+    state = cast(AppState, req.app.state)
+    data = state.data
 
     q_contents = await file.read()
     q_nparr = np.frombuffer(q_contents, np.uint8)
@@ -139,8 +95,12 @@ async def sift(req: Request, file: UploadFile):
     if q_img is None:
         raise HTTPException(status_code=400, detail="Could not read image")
 
+    q_img = common.image.downscale(q_img)
+
     _, q_desc = data.sift.detectAndCompute(q_img, None)
-    q_hist = histogram(data.word_index, data.centroids, q_desc)
+
+    _, labels = data.word_index.search(q_desc, 1)
+    q_hist = np.bincount(labels.ravel(), minlength=len(data.words))
 
     n = len(data.image_files)
 
@@ -170,13 +130,13 @@ async def sift(req: Request, file: UploadFile):
 
     _, axes = plt.subplots(1, 6, figsize=(18, 4))
 
-    q_img_color = cv2.imdecode(q_nparr, cv2.IMREAD_COLOR)
+    q_img_color = cv2.imdecode(q_nparr, cv2.IMREAD_COLOR_RGB)
     axes[0].imshow(q_img_color)
     axes[0].set_title("Query")
     axes[0].axis("off")
 
-    for i, filename in enumerate(top_files):
-        img = cv2.imread(f"{IMAGES_DIR}/{filename}", cv2.IMREAD_COLOR_RGB)
+    for i, img_path in enumerate(top_files):
+        img = cv2.imread(img_path, cv2.IMREAD_COLOR_RGB)
 
         axes[i + 1].imshow(img)
         axes[i + 1].set_title(f"Top {i + 1}")
