@@ -10,6 +10,8 @@ pkgs.mkShell {
         fastapi-cli
         opencv4
         matplotlib
+        python-multipart
+        faiss
       ]
     ))
   ];
