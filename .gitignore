@@ -11,3 +11,5 @@ wheels/
 
 fashion-dataset/
 images/
+
+.data/
