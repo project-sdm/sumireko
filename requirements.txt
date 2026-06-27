@@ -1,0 +1,7 @@
+opencv-python
+faiss-cpu
+numpy
+fastapi
+uvicorn
+python-multipart
+starlette
