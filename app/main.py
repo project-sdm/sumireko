@@ -8,7 +8,6 @@ from typing import cast
 
 import cv2
 import faiss
-import matplotlib.pyplot as plt
 import numpy as np
 import numpy.typing as npt
 from cv2.typing import MatLike
@@ -100,7 +99,7 @@ async def health():
 
 
 @app.post("/image-search")
-async def image_search(req: Request, file: UploadFile):
+async def image_search(req: Request, file: UploadFile, k: int | None = 5):
     state = cast(AppState, req.app.state)
     data = state.data
 
@@ -142,6 +141,6 @@ async def image_search(req: Request, file: UploadFile):
         scores[img_id] /= data.lengths[img_id] * query_length
 
     result = sorted(scores.items(), key=lambda tup: tup[1], reverse=True)
-    top_files = [data.image_files[i] for i, _ in result[:5]]
+    top_files = [data.image_files[i] for i, _ in result[:k]]
 
     return {"results": [f"{path}" for path in top_files]}
