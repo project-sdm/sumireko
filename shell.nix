@@ -17,4 +17,8 @@ pkgs.mkShell {
       ]
     ))
   ];
+
+  env = {
+    PYTHONPATH = ".";
+  };
 }
