@@ -3,32 +3,28 @@ import math
 import os
 import sys
 
-import cv2
 import faiss
+import librosa
 import numpy as np
-from cv2.typing import MatLike
 
-import shared.image
-
-OUTPUT_DIR = ".data/images"
-VBOW_LEN = 1000
+OUTPUT_DIR = ".data/audios"
+ABOW_LEN = 1000
 KMEANS_ITER = 100
+PRE_EMPHASIS = 0.97
 
 
 def main():
     if len(sys.argv) < 2:
-        raise Exception("must provide a path to the images folder")
+        raise Exception("must provide a path to the audios folder")
 
-    images_dir = sys.argv[1]
-    print(f"Reading '{images_dir}'...")
+    audios_dir = sys.argv[1]
+    print(f"Reading '{audios_dir}'...")
 
-    sift = cv2.SIFT.create()
-
-    paths = [f"{images_dir}/{filename}" for filename in os.listdir(images_dir)]
-    print(f"Found {len(paths)} images")
+    paths = [f"{audios_dir}/{filename}" for filename in os.listdir(audios_dir)]
+    print(f"Found {len(paths)} audios")
 
     print("Extracting features...")
-    all_descriptors: list[MatLike] = []
+    all_descriptors: list[np.ndarray] = []
 
     next_step = 0
 
@@ -41,22 +37,35 @@ def main():
             while progress >= next_step:
                 next_step += 0.01
 
-        img = cv2.imread(path)
-        assert img is not None, f"Failed to load {path}"
+        try:
+            audio, sr = librosa.load(path, sr=None)
+        except Exception:
+            print(f"failed to load {path}, skipping...", file=sys.stderr)
+            continue
 
-        img = shared.image.downscale(img)
+        audio = np.append(audio[0], audio[1:] - PRE_EMPHASIS * audio[:-1])
 
-        _, d = sift.detectAndCompute(img, None)
-        if d is not None:
+        d = librosa.feature.mfcc(
+            y=audio,
+            sr=sr,
+            n_mfcc=13,
+            n_fft=int(0.025 * sr),
+            win_length=int(0.025 * sr),
+            hop_length=int(0.010 * sr),
+            window="hamming",
+            center=False,
+        ).T
+
+        if len(d) > 0:
             all_descriptors.append(d)
 
     print("Progress: 100%")
 
     points = np.vstack(all_descriptors).astype(np.float32)
 
-    print(f"Clustering... (k = {VBOW_LEN}, niter = {KMEANS_ITER})")
+    print(f"Clustering... (k = {ABOW_LEN}, niter = {KMEANS_ITER})")
     kmeans = faiss.Kmeans(
-        points.shape[1], VBOW_LEN, niter=KMEANS_ITER, gpu=True, verbose=True
+        points.shape[1], ABOW_LEN, niter=KMEANS_ITER, gpu=True, verbose=True
     )
     kmeans.train(points)
     words = kmeans.centroids
@@ -69,11 +78,11 @@ def main():
     hists = []
     for desc in all_descriptors:
         _, labels = word_index.search(desc, 1)
-        hists.append(np.bincount(labels.ravel(), minlength=VBOW_LEN))
+        hists.append(np.bincount(labels.ravel(), minlength=ABOW_LEN))
 
     print("Building inverted index...")
 
-    df = np.zeros(VBOW_LEN)
+    df = np.zeros(ABOW_LEN)
 
     for hist in hists:
         for word_id, tf in enumerate(hist):
@@ -81,22 +90,22 @@ def main():
                 df[word_id] += 1
 
     n = len(paths)
-    index: list[list[tuple[int, float]]] = [[] for _ in range(VBOW_LEN)]
+    index: list[list[tuple[int, float]]] = [[] for _ in range(ABOW_LEN)]
     lengths = np.zeros(n)
 
     def weight(word_id: int, tf: int) -> float:
         return math.log(1 + tf) * math.log((n + 1) / (df[word_id] + 1))
 
-    for img_id, hist in enumerate(hists):
+    for audio_id, hist in enumerate(hists):
         for word_id, tf in enumerate(hist):
             if tf == 0:
                 continue
             w = weight(word_id, tf)
-            lengths[img_id] += w**2
-            index[word_id].append((img_id, w))
+            lengths[audio_id] += w**2
+            index[word_id].append((audio_id, w))
 
-    for img_id in range(n):
-        lengths[img_id] = math.sqrt(lengths[img_id])
+    for audio_id in range(n):
+        lengths[audio_id] = math.sqrt(lengths[audio_id])
 
     print("Saving...")
     os.makedirs(OUTPUT_DIR, exist_ok=True)
