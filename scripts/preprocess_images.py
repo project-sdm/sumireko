@@ -8,10 +8,10 @@ import faiss
 import numpy as np
 from cv2.typing import MatLike
 
-import common.image
+import shared.image
 
 OUTPUT_DIR = ".data/images"
-VBOW_LEN = 500
+VBOW_LEN = 1000
 KMEANS_ITER = 100
 
 
@@ -44,7 +44,7 @@ def main():
         img = cv2.imread(path)
         assert img is not None, f"Failed to load {path}"
 
-        img = common.image.downscale(img)
+        img = shared.image.downscale(img)
 
         _, d = sift.detectAndCompute(img, None)
         if d is not None:
@@ -107,7 +107,7 @@ def main():
 
     faiss.write_index(word_index, f"{OUTPUT_DIR}/word_index.faiss")
 
-    with open(f"{OUTPUT_DIR}/image_files.json", "w") as f:
+    with open(f"{OUTPUT_DIR}/media_files.json", "w") as f:
         json.dump(paths, f)
 
     with open(f"{OUTPUT_DIR}/index.json", "w") as f:
