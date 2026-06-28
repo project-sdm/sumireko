@@ -7,6 +7,7 @@ import numpy as np
 import scripts.shared
 
 PRE_EMPHASIS = 0.97
+OUTPUT_DIR = ".data/audios"
 
 
 def main():
@@ -58,7 +59,7 @@ def main():
 
     print("Progress: 100%")
 
-    scripts.shared.preprocess(all_descriptors, filenames, output_dir=".data/audios")
+    scripts.shared.preprocess(all_descriptors, filenames, output_dir=OUTPUT_DIR)
 
 
 if __name__ == "__main__":

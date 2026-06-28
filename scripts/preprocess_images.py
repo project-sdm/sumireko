@@ -48,7 +48,7 @@ def main():
 
     print("Progress: 100%")
 
-    scripts.shared.preprocess(all_descriptors, filenames, output_dir=".data/images")
+    scripts.shared.preprocess(all_descriptors, filenames, output_dir=OUTPUT_DIR)
 
 
 if __name__ == "__main__":
