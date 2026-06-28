@@ -9,7 +9,8 @@ dependencies = [
     "opencv-python-headless",
     "python-multipart",
     "faiss-cpu",
+    "librosa",
 ]
 
 [tool.setuptools.packages.find]
-include = ["app*", "common*"]
+include = ["app*", "shared*"]
