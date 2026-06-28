@@ -93,6 +93,12 @@ app.mount(
     name="images",
 )
 
+app.mount(
+    "/media/audios",
+    StaticFiles(directory="media/audios"),
+    name="audios",
+)
+
 app.add_middleware(
     CORSMiddleware,
     allow_origins="*",
@@ -108,3 +114,4 @@ async def health():
 
 
 app.include_router(image_router)
+app.include_router(audio_router)
