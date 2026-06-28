@@ -24,7 +24,8 @@ def main():
 
     sift = cv2.SIFT.create()
 
-    paths = [f"{images_dir}/{filename}" for filename in os.listdir(images_dir)]
+    filenames = os.listdir(images_dir)[:10]
+    paths = [f"{images_dir}/{filename}" for filename in filenames]
     print(f"Found {len(paths)} images")
 
     print("Extracting features...")
@@ -108,7 +109,7 @@ def main():
     faiss.write_index(word_index, f"{OUTPUT_DIR}/word_index.faiss")
 
     with open(f"{OUTPUT_DIR}/media_files.json", "w") as f:
-        json.dump(paths, f)
+        json.dump(filenames, f)
 
     with open(f"{OUTPUT_DIR}/index.json", "w") as f:
         json.dump(index, f)
