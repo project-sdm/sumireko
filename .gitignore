@@ -11,3 +11,4 @@ wheels/
 
 media/
 .data/
+.data-*/
