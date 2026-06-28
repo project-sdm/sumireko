@@ -21,7 +21,7 @@ def main():
 
     sift = cv2.SIFT.create()
 
-    filenames = os.listdir(images_dir)[:10]
+    filenames = os.listdir(images_dir)
     paths = [f"{images_dir}/{filename}" for filename in filenames]
     print(f"Found {len(paths)} images")
 
