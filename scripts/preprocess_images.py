@@ -8,8 +8,6 @@ import scripts.shared
 import shared.image
 
 OUTPUT_DIR = ".data/images"
-VBOW_LEN = 1000
-KMEANS_ITER = 100
 
 
 def main():
