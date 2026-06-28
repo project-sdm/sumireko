@@ -11,7 +11,7 @@ COPY pyproject.toml .
 RUN pip install --no-cache-dir .
 
 COPY app/ app/
-COPY common/ common/
+COPY shared/ shared/
 COPY .data/ .data/
 
 EXPOSE 8000
