@@ -1,0 +1,15 @@
+[project]
+name = "sumireko"
+version = "0.1.0"
+description = "Proyecto final de BD2"
+requires-python = ">=3.14"
+dependencies = [
+    "numpy",
+    "fastapi[standard]",
+    "opencv-python-headless",
+    "python-multipart",
+    "faiss-cpu",
+]
+
+[tool.setuptools.packages.find]
+include = ["app*", "common*"]
