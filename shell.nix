@@ -11,7 +11,6 @@ pkgs.mkShell {
         fastapi-cli
         opencv4
         librosa
-        matplotlib
         python-multipart
         faiss
       ]
