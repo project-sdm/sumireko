@@ -139,13 +139,16 @@ def flush_raw_block(
 
 
 def build_spimi_block_files(
-    chunks: list[shared.text.TextChunk],
+    chunks: Iterable[shared.text.TextChunk],
+    chunk_count: int,
     word_to_id: dict[str, int],
     language: str,
     min_token_len: int,
     use_stemming: bool,
     block_size: int,
     tmp_dir: Path,
+    chunks_writer: JsonArrayWriter,
+    media_files_writer: JsonArrayWriter,
 ) -> list[BlockFiles]:
     block_files: list[BlockFiles] = []
     current = _empty_block(len(word_to_id))
@@ -153,7 +156,16 @@ def build_spimi_block_files(
     block_id = 0
 
     for chunk_id, chunk in enumerate(chunks):
-        meter.record(chunk_id / len(chunks))
+        meter.record(chunk_id / chunk_count)
+        media_files_writer.write(chunk.identifier)
+        chunks_writer.write(
+            {
+                "id": chunk.identifier,
+                "source": chunk.source,
+                "ordinal": chunk.ordinal,
+                "text": chunk.text,
+            }
+        )
         tokens = shared.text.normalize_tokens(
             chunk.text,
             language=language,
