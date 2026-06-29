@@ -247,7 +247,6 @@ def compute_weighted_index(
 def save_outputs(
     output_dir: Path,
     words: list[str],
-    chunks: list[shared.text.TextChunk],
     index: list[list[tuple[int, float]]],
     df: np.ndarray,
     lengths: np.ndarray,
@@ -260,25 +259,8 @@ def save_outputs(
     np.save(output_dir / "lengths.npy", lengths)
     np.save(output_dir / "histograms.npy", weighted_hists)
 
-    with open(output_dir / "media_files.json", "w") as f:
-        json.dump([chunk.identifier for chunk in chunks], f)
-
     with open(output_dir / "index.json", "w") as f:
         json.dump(index, f)
-
-    with open(output_dir / "chunks.json", "w") as f:
-        json.dump(
-            [
-                {
-                    "id": chunk.identifier,
-                    "source": chunk.source,
-                    "ordinal": chunk.ordinal,
-                    "text": chunk.text,
-                }
-                for chunk in chunks
-            ],
-            f,
-        )
 
     with open(output_dir / "word_to_id.json", "w") as f:
         json.dump({word: i for i, word in enumerate(words)}, f)
