@@ -19,3 +19,8 @@ class TextChunk:
     @property
     def identifier(self) -> str:
         return f"{self.source}#chunk_{self.ordinal}"
+
+
+def split_paragraphs(content: str, min_chars: int = 1) -> list[str]:
+    paragraphs = [part.strip() for part in re.split(r"\n\s*\n+", content)]
+    return [paragraph for paragraph in paragraphs if len(paragraph) >= min_chars]
