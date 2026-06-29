@@ -1,5 +1,4 @@
 import json
-import math
 import os
 from dataclasses import dataclass
 from pathlib import Path
@@ -73,8 +72,7 @@ def preprocess(
             lengths[word_id] += w**2
             index[centroid_id].append((word_id, w))
 
-    for word_id in range(n):
-        lengths[word_id] = math.sqrt(lengths[word_id])
+    lengths = np.sqrt(lengths)
 
     print("Computing TF-IDF weighted histograms...")
     weighted_hists = np.zeros((n, bow_len), dtype=np.float32)
