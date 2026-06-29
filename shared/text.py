@@ -1,7 +1,6 @@
 import re
 import string
-from collections import Counter
-from collections.abc import Iterable, Iterator
+from collections.abc import Iterator
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -12,19 +11,13 @@ TOKEN_RE = re.compile(r"[a-zA-ZÀ-ÿ0-9]+")
 
 
 @dataclass(frozen=True)
-class TextChunk:
+class TextDocument:
     source: str
-    ordinal: int
     text: str
 
     @property
     def identifier(self) -> str:
-        return f"{self.source}#chunk_{self.ordinal}"
-
-
-def split_paragraphs(content: str, min_chars: int = 1) -> list[str]:
-    paragraphs = [part.strip() for part in re.split(r"\n\s*\n+", content)]
-    return [paragraph for paragraph in paragraphs if len(paragraph) >= min_chars]
+        return self.source
 
 
 def read_text_file(path: Path) -> str:
@@ -34,16 +27,13 @@ def read_text_file(path: Path) -> str:
         return path.read_text(encoding="latin-1")
 
 
-def yield_text_chunks(paths: list[Path], min_chars: int = 1) -> Iterator[TextChunk]:
+def yield_text_documents(paths: list[Path]) -> Iterator[TextDocument]:
     for path in paths:
-        paragraphs = split_paragraphs(read_text_file(path), min_chars=min_chars)
-
-        for ordinal, paragraph in enumerate(paragraphs):
-            yield TextChunk(path.name, ordinal, paragraph)
+        yield TextDocument(path.name, read_text_file(path))
 
 
-def iter_text_chunks(paths: list[Path], min_chars: int = 1) -> list[TextChunk]:
-    return list(yield_text_chunks(paths, min_chars=min_chars))
+def iter_text_documents(paths: list[Path]) -> list[TextDocument]:
+    return list(yield_text_documents(paths))
 
 
 def get_stopwords(language: str) -> set[str]:
@@ -84,27 +74,6 @@ def normalize_tokens(
         tokens.append(token)
 
     return tokens
-
-
-def collection_term_counts(
-    chunks: Iterable[TextChunk],
-    language: str = "spanish",
-    min_token_len: int = 2,
-    use_stemming: bool = True,
-) -> Counter[str]:
-    counts: Counter[str] = Counter()
-
-    for chunk in chunks:
-        counts.update(
-            normalize_tokens(
-                chunk.text,
-                language=language,
-                min_token_len=min_token_len,
-                use_stemming=use_stemming,
-            )
-        )
-
-    return counts
 
 
 def _library_stopwords(language: str) -> set[str]:
