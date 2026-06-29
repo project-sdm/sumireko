@@ -209,3 +209,26 @@ def main():
         raise Exception("empty text codebook")
 
     word_to_id = {word: i for i, word in enumerate(words)}
+
+    print("Building inverted index...")
+    blocks = build_spimi_blocks(
+        chunks,
+        word_to_id,
+        args.language,
+        args.min_token_len,
+        use_stemming,
+        args.block_size,
+    )
+
+    raw_index = merge_blocks(blocks, len(words))
+
+    print("Computing TF-IDF weighted histograms...")
+    index, df, lengths, weighted_hists = compute_weighted_index(raw_index, len(chunks))
+
+    print("Saving...")
+    save_outputs(args.output_dir, words, chunks, index, df, lengths, weighted_hists)
+    print("Done.")
+
+
+if __name__ == "__main__":
+    main()
