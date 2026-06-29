@@ -173,3 +173,39 @@ def save_outputs(
 
 def _empty_block(bow_len: int) -> list[list[tuple[int, int]]]:
     return [[] for _ in range(bow_len)]
+
+
+def main():
+    args = parse_args()
+    texts_dir: Path = args.texts_dir
+
+    if not texts_dir.exists():
+        raise Exception(f"texts folder does not exist: {texts_dir}")
+
+    filenames = sorted(path for path in texts_dir.iterdir() if path.suffix == ".txt")
+    if not filenames:
+        raise Exception(f"no .txt files found in {texts_dir}")
+
+    print(f"Reading '{texts_dir}'...")
+    print(f"Found {len(filenames)} text files")
+
+    chunks = shared.text.iter_text_chunks(filenames, min_chars=args.min_chars)
+    if not chunks:
+        raise Exception("no text chunks found")
+
+    print(f"Found {len(chunks)} chunks")
+
+    use_stemming = not args.no_stemming
+
+    print(f"Building codebook... (k = {args.codebook_size})")
+    words = build_codebook(
+        chunks,
+        args.codebook_size,
+        args.language,
+        args.min_token_len,
+        use_stemming,
+    )
+    if not words:
+        raise Exception("empty text codebook")
+
+    word_to_id = {word: i for i, word in enumerate(words)}
