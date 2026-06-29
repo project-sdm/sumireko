@@ -13,6 +13,7 @@ pkgs.mkShell {
         librosa
         python-multipart
         faiss
+        psycopg
       ]
     ))
   ];
