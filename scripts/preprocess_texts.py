@@ -284,22 +284,22 @@ def main():
     print(f"Reading '{texts_dir}'...")
     print(f"Found {len(filenames)} text files")
 
-    chunks = shared.text.iter_text_chunks(filenames, min_chars=args.min_chars)
-    if not chunks:
-        raise Exception("no text chunks found")
-
-    print(f"Found {len(chunks)} chunks")
-
     use_stemming = not args.no_stemming
 
     print(f"Building codebook... (k = {args.codebook_size})")
-    words = build_codebook(
-        chunks,
+    words, chunk_count = build_codebook_from_files(
+        filenames,
         args.codebook_size,
         args.language,
+        args.min_chars,
         args.min_token_len,
         use_stemming,
     )
+    if chunk_count == 0:
+        raise Exception("no text chunks found")
+
+    print(f"Found {chunk_count} chunks")
+
     if not words:
         raise Exception("empty text codebook")
 
@@ -308,23 +308,34 @@ def main():
     tmp_dir = args.tmp_dir or args.output_dir / "tmp"
 
     print("Building inverted index...")
-    block_files = build_spimi_block_files(
-        chunks,
-        word_to_id,
-        args.language,
-        args.min_token_len,
-        use_stemming,
-        args.block_size,
-        tmp_dir,
-    )
+    os.makedirs(args.output_dir, exist_ok=True)
+    chunks_writer = JsonArrayWriter(args.output_dir / "chunks.json")
+    media_files_writer = JsonArrayWriter(args.output_dir / "media_files.json")
+
+    try:
+        block_files = build_spimi_block_files(
+            shared.text.yield_text_chunks(filenames, min_chars=args.min_chars),
+            chunk_count,
+            word_to_id,
+            args.language,
+            args.min_token_len,
+            use_stemming,
+            args.block_size,
+            tmp_dir,
+            chunks_writer,
+            media_files_writer,
+        )
+    finally:
+        chunks_writer.close()
+        media_files_writer.close()
 
     raw_index = merge_block_files(block_files, len(words))
 
     print("Computing TF-IDF weighted histograms...")
-    index, df, lengths, weighted_hists = compute_weighted_index(raw_index, len(chunks))
+    index, df, lengths, weighted_hists = compute_weighted_index(raw_index, chunk_count)
 
     print("Saving...")
-    save_outputs(args.output_dir, words, chunks, index, df, lengths, weighted_hists)
+    save_outputs(args.output_dir, words, index, df, lengths, weighted_hists)
 
     if not args.keep_tmp:
         shutil.rmtree(tmp_dir, ignore_errors=True)
