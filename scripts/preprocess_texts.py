@@ -237,8 +237,8 @@ def merge_block_files(
 def compute_weighted_index_files(
     raw_files: BlockFiles,
     output_dir: Path,
-    bow_len: int,
-    chunk_count: int,
+    term_count: int,
+    document_count: int,
     save_json_index: bool,
     save_dense_histograms: bool,
 ) -> tuple[
@@ -247,14 +247,14 @@ def compute_weighted_index_files(
     np.ndarray,
     np.ndarray | None,
 ]:
-    df = np.zeros(bow_len, dtype=np.uint32)
-    lengths = np.zeros(chunk_count, dtype=np.float32)
+    df = np.zeros(term_count, dtype=np.uint32)
+    lengths = np.zeros(document_count, dtype=np.float32)
     weighted_hists = (
-        np.zeros((chunk_count, bow_len), dtype=np.float32)
+        np.zeros((document_count, term_count), dtype=np.float32)
         if save_dense_histograms
         else None
     )
-    weighted_index = [[] for _ in range(bow_len)] if save_json_index else None
+    weighted_index = [[] for _ in range(term_count)] if save_json_index else None
 
     postings_path = output_dir / "postings.bin"
     lexicon_path = output_dir / "lexicon.bin"
@@ -265,7 +265,7 @@ def compute_weighted_index_files(
 
     with open(raw_files.postings_path, "rb") as raw_postings_file:
         with open(postings_path, "wb") as weighted_postings_file:
-            for word_id in range(bow_len):
+            for word_id in range(term_count):
                 entry = raw_lexicon.get(word_id)
                 if entry is None:
                     continue
@@ -278,13 +278,13 @@ def compute_weighted_index_files(
                 df[word_id] = len(raw_postings)
                 weighted_postings: list[tuple[int, float]] = []
 
-                for chunk_id, tf in raw_postings:
-                    weight = shared.weight(chunk_count, tf, int(df[word_id]))
-                    lengths[chunk_id] += weight**2
-                    weighted_postings.append((chunk_id, weight))
+                for document_id, tf in raw_postings:
+                    weight = shared.weight(document_count, tf, int(df[word_id]))
+                    lengths[document_id] += weight**2
+                    weighted_postings.append((document_id, weight))
 
                     if weighted_hists is not None:
-                        weighted_hists[chunk_id, word_id] = weight
+                        weighted_hists[document_id, word_id] = weight
 
                 offset, posting_count = write_weighted_postings(
                     weighted_postings_file,
@@ -298,8 +298,8 @@ def compute_weighted_index_files(
     with open(lexicon_path, "wb") as lexicon_file:
         write_lexicon(lexicon_file, entries)
 
-    for chunk_id in range(chunk_count):
-        lengths[chunk_id] = math.sqrt(lengths[chunk_id])
+    for document_id in range(document_count):
+        lengths[document_id] = math.sqrt(lengths[document_id])
 
     return weighted_index, df, lengths, weighted_hists
 
