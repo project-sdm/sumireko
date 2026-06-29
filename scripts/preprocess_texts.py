@@ -446,10 +446,17 @@ def main():
         chunks_writer.close()
         media_files_writer.close()
 
-    raw_index = merge_block_files(block_files, len(words))
+    raw_files = merge_block_files(block_files, len(words))
 
-    print("Computing TF-IDF weighted histograms...")
-    index, df, lengths, weighted_hists = compute_weighted_index(raw_index, chunk_count)
+    print("Computing TF-IDF weighted index...")
+    index, df, lengths, weighted_hists = compute_weighted_index_files(
+        raw_files,
+        args.output_dir,
+        len(words),
+        chunk_count,
+        args.save_json_index,
+        args.save_dense_histograms,
+    )
 
     print("Saving...")
     save_outputs(args.output_dir, words, index, df, lengths, weighted_hists)
