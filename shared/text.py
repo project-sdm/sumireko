@@ -1,3 +1,4 @@
+import functools
 import re
 import string
 from collections import Counter
@@ -106,6 +107,7 @@ def collection_term_counts(
     return counts
 
 
+@functools.lru_cache
 def _library_stopwords(language: str) -> set[str]:
     try:
         return set(nltk_stopwords.words(language))
@@ -123,5 +125,6 @@ def _stemmer_language(language: str) -> str:
     return "spanish"
 
 
-def _build_stemmer(language: str):
+@functools.lru_cache
+def _build_stemmer(language: str) -> SnowballStemmer:
     return SnowballStemmer(_stemmer_language(language))
