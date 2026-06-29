@@ -1,7 +1,7 @@
 services:
   sumireko:
     container_name: "sumireko"
-    build: "."
+    image: "grazen/sumireko"
     ports:
       - "8000:8000"
     environment:
@@ -22,3 +22,11 @@ services:
       - "5432:5432"
     environment:
       POSTGRES_PASSWORD: "123"
+
+  frontend:
+    container_name: "sumireko-frontend"
+    image: "grazen/sumireko-frontend"
+    ports:
+      - "3000:3000"
+    depends_on:
+      - "sumireko"
