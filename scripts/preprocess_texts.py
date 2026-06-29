@@ -92,17 +92,19 @@ def flush_raw_block(
     return BlockFiles(postings_path, lexicon_path)
 
 
-def build_spimi_blocks(
+def build_spimi_block_files(
     chunks: list[shared.text.TextChunk],
     word_to_id: dict[str, int],
     language: str,
     min_token_len: int,
     use_stemming: bool,
     block_size: int,
-) -> list[list[list[tuple[int, int]]]]:
-    blocks: list[list[list[tuple[int, int]]]] = []
+    tmp_dir: Path,
+) -> list[BlockFiles]:
+    block_files: list[BlockFiles] = []
     current = _empty_block(len(word_to_id))
     meter = ProgressMeter(0.0001)
+    block_id = 0
 
     for chunk_id, chunk in enumerate(chunks):
         meter.record(chunk_id / len(chunks))
@@ -120,15 +122,16 @@ def build_spimi_blocks(
             current[word_id].append((chunk_id, tf))
 
         if (chunk_id + 1) % block_size == 0:
-            blocks.append(current)
+            block_files.append(flush_raw_block(current, tmp_dir, block_id))
             current = _empty_block(len(word_to_id))
+            block_id += 1
 
     meter.record(1)
 
     if any(postings for postings in current):
-        blocks.append(current)
+        block_files.append(flush_raw_block(current, tmp_dir, block_id))
 
-    return blocks
+    return block_files
 
 
 def merge_blocks(
