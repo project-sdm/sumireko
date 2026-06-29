@@ -2,8 +2,10 @@ import argparse
 import json
 import math
 import os
+import shutil
 import sys
 from collections import Counter
+from dataclasses import dataclass
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
@@ -12,9 +14,22 @@ import numpy as np
 
 import shared
 import shared.text
+from scripts.binary_index import (
+    LexiconEntry,
+    read_lexicon,
+    read_raw_postings,
+    write_lexicon,
+    write_raw_postings,
+)
 from scripts.shared import ProgressMeter
 
 OUTPUT_DIR = Path(".data/texts")
+
+
+@dataclass(frozen=True)
+class BlockFiles:
+    postings_path: Path
+    lexicon_path: Path
 
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description="Preprocess text files into TF-IDF chunks.")
