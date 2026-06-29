@@ -137,49 +137,48 @@ def flush_raw_block(
 
 
 def build_spimi_block_files(
-    chunks: Iterable[shared.text.TextChunk],
-    chunk_count: int,
-    word_to_id: dict[str, int],
+    documents: Iterable[shared.text.TextDocument],
+    document_count: int,
+    term_to_id: dict[str, int],
     language: str,
     min_token_len: int,
     use_stemming: bool,
     block_size: int,
     tmp_dir: Path,
-    chunks_writer: JsonArrayWriter,
+    documents_writer: JsonArrayWriter,
     media_files_writer: JsonArrayWriter,
 ) -> list[BlockFiles]:
     block_files: list[BlockFiles] = []
-    current = _empty_block(len(word_to_id))
+    current = _empty_block(len(term_to_id))
     meter = ProgressMeter(0.0001)
     block_id = 0
 
-    for chunk_id, chunk in enumerate(chunks):
-        meter.record(chunk_id / chunk_count)
-        media_files_writer.write(chunk.identifier)
-        chunks_writer.write(
+    for document_id, document in enumerate(documents):
+        meter.record(document_id / document_count)
+        media_files_writer.write(document.identifier)
+        documents_writer.write(
             {
-                "id": chunk.identifier,
-                "source": chunk.source,
-                "ordinal": chunk.ordinal,
-                "text": chunk.text,
+                "id": document.identifier,
+                "source": document.source,
+                "text": document.text,
             }
         )
         tokens = shared.text.normalize_tokens(
-            chunk.text,
+            document.text,
             language=language,
             min_token_len=min_token_len,
             use_stemming=use_stemming,
         )
         frequencies = Counter(
-            word_to_id[token] for token in tokens if token in word_to_id
+            term_to_id[token] for token in tokens if token in term_to_id
         )
 
         for word_id, tf in frequencies.items():
-            current[word_id].append((chunk_id, tf))
+            current[word_id].append((document_id, tf))
 
-        if (chunk_id + 1) % block_size == 0:
+        if (document_id + 1) % block_size == 0:
             block_files.append(flush_raw_block(current, tmp_dir, block_id))
-            current = _empty_block(len(word_to_id))
+            current = _empty_block(len(term_to_id))
             block_id += 1
 
     meter.record(1)
