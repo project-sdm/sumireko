@@ -54,3 +54,18 @@ def read_raw_postings(
         postings.append(RAW_POSTING.unpack(raw))
 
     return postings
+
+
+def write_weighted_postings(
+    file: BinaryIO,
+    postings: Sequence[tuple[int, float]],
+) -> tuple[int, int]:
+    offset = file.tell()
+    _check_uint64(offset, "offset")
+
+    for chunk_id, weight in postings:
+        _check_uint32(chunk_id, "chunk_id")
+        file.write(WEIGHTED_POSTING.pack(chunk_id, float(weight)))
+
+    _check_uint32(len(postings), "posting_count")
+    return offset, len(postings)
