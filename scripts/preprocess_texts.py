@@ -198,27 +198,68 @@ def build_spimi_block_files(
 def merge_block_files(
     block_files: list[BlockFiles],
     bow_len: int,
-) -> list[list[tuple[int, int]]]:
-    merged: list[list[tuple[int, int]]] = _empty_block(bow_len)
+) -> BlockFiles:
+    raw_postings_path = block_files[0].postings_path.parent / "raw.postings.bin"
+    raw_lexicon_path = block_files[0].lexicon_path.parent / "raw.lexicon.bin"
+    block_lexicons = []
 
     for block in block_files:
         with open(block.lexicon_path, "rb") as lexicon_file:
-            lexicon = read_lexicon(lexicon_file)
+            block_lexicons.append(read_lexicon(lexicon_file))
 
-        with open(block.postings_path, "rb") as postings_file:
-            for word_id, entry in lexicon.items():
-                merged[word_id].extend(
-                    read_raw_postings(
-                        postings_file,
-                        entry.offset,
-                        entry.posting_count,
+    entries: list[LexiconEntry] = []
+
+    with open(raw_postings_path, "wb") as raw_postings_file:
+        for word_id in range(bow_len):
+            merged: list[tuple[int, int]] = []
+
+            for block, lexicon in zip(block_files, block_lexicons):
+                entry = lexicon.get(word_id)
+                if entry is None:
+                    continue
+
+                with open(block.postings_path, "rb") as postings_file:
+                    merged.extend(
+                        read_raw_postings(
+                            postings_file,
+                            entry.offset,
+                            entry.posting_count,
+                        )
                     )
+
+            if not merged:
+                continue
+
+            merged.sort(key=lambda posting: posting[0])
+            offset, posting_count = write_raw_postings(raw_postings_file, merged)
+            entries.append(LexiconEntry(word_id, offset, posting_count))
+
+    with open(raw_lexicon_path, "wb") as raw_lexicon_file:
+        write_lexicon(raw_lexicon_file, entries)
+
+    return BlockFiles(raw_postings_path, raw_lexicon_path)
+
+
+def load_raw_index(
+    raw_files: BlockFiles,
+    bow_len: int,
+) -> list[list[tuple[int, int]]]:
+    raw_index: list[list[tuple[int, int]]] = _empty_block(bow_len)
+
+    with open(raw_files.lexicon_path, "rb") as lexicon_file:
+        lexicon = read_lexicon(lexicon_file)
+
+    with open(raw_files.postings_path, "rb") as postings_file:
+        for word_id, entry in lexicon.items():
+            raw_index[word_id].extend(
+                read_raw_postings(
+                    postings_file,
+                    entry.offset,
+                    entry.posting_count,
                 )
+            )
 
-    for postings in merged:
-        postings.sort(key=lambda posting: posting[0])
-
-    return merged
+    return raw_index
 
 
 def compute_weighted_index(
