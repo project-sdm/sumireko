@@ -21,6 +21,7 @@ from scripts.binary_index import (
     read_raw_postings,
     write_lexicon,
     write_raw_postings,
+    write_weighted_postings,
 )
 from scripts.shared import ProgressMeter
 
@@ -69,6 +70,8 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--block-size", type=int, default=5000)
     parser.add_argument("--tmp-dir", type=Path)
     parser.add_argument("--keep-tmp", action="store_true")
+    parser.add_argument("--save-json-index", action="store_true")
+    parser.add_argument("--save-dense-histograms", action="store_true")
     return parser.parse_args()
 
 
