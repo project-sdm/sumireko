@@ -6,6 +6,7 @@ from cv2.typing import MatLike
 from fastapi import APIRouter, HTTPException, Request, UploadFile
 
 import app.common.algos as algos
+from app.common.algos import SearchMode
 from app.common.state import AppState
 
 image_router = APIRouter(prefix="/images", tags=["images"])
@@ -25,18 +26,17 @@ async def extract_descriptors(state: AppState, file: UploadFile) -> MatLike:
 
 
 @image_router.post("/search")
-async def image_search(req: Request, file: UploadFile, k: int | None = 5):
+async def image_search(
+    req: Request,
+    file: UploadFile,
+    k: int = 5,
+    mode: SearchMode = SearchMode.native,
+):
     state = cast(AppState, req.app.state)
     q_desc = await extract_descriptors(state, file)
 
-    return algos.knn(q_desc, state.image_data, k)
-
-
-@image_router.post("/search-pgvector")
-async def image_search_pgvector(req: Request, file: UploadFile, k: int = 5):
-    state = cast(AppState, req.app.state)
-    q_desc = await extract_descriptors(state, file)
-    q_hist = algos.compute_query_histogram(q_desc, state.image_data)
+    if mode == SearchMode.native:
+        return algos.knn(q_desc, state.image_data, k)
 
     with state.db.connection() as conn:
-        return algos.knn_postgres(conn, "images", q_hist, k)
+        return algos.knn_postgres(conn, "images", q_desc, state.image_data, k, mode)

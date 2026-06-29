@@ -1,12 +1,20 @@
 import math
 import time
 from dataclasses import dataclass
+from enum import Enum
 
 import numpy as np
 from psycopg import Connection
 
 import shared
 from app.common.state import PreprocessedData
+
+
+class SearchMode(str, Enum):
+    native = "native"
+    pg_brute = "pg-brute"
+    pg_ivf = "pg-ivf"
+    pg_hnsw = "pg-hnsw"
 
 
 @dataclass
@@ -42,7 +50,6 @@ def knn(descriptors: np.ndarray, data: PreprocessedData, k: int | None) -> KnnRe
         scores[img_id] /= data.lengths[img_id] * query_length
 
     result = sorted(scores.items(), key=lambda tup: tup[1], reverse=True)
-
     elapsed_ms = (time.perf_counter() - start) * 1000
 
     top_files = [data.media_files[i] for i, _ in result[:k]]
@@ -51,32 +58,38 @@ def knn(descriptors: np.ndarray, data: PreprocessedData, k: int | None) -> KnnRe
 
 
 def knn_postgres(
-    conn: Connection, table_name: str, hist: list[float], k: int
-) -> dict[str, KnnResult]:
-    results: dict[str, KnnResult] = {}
+    conn: Connection,
+    table_name: str,
+    descriptors: np.ndarray,
+    data: PreprocessedData,
+    k: int,
+    mode: SearchMode,
+) -> KnnResult:
+    assert mode != SearchMode.native
+
+    COLUMNS = {
+        SearchMode.pg_brute: "histogram_brute",
+        SearchMode.pg_ivf: "histogram_ivf",
+        SearchMode.pg_hnsw: "histogram_hnsw",
+    }
+    column = COLUMNS[mode]
+
+    start = time.perf_counter()
+    hist = compute_query_histogram(descriptors, data)
 
     with conn.cursor() as cur:
-        INDICES = [
-            ("brute", "histogram_brute"),
-            ("ivfflat", "histogram_ivf"),
-            ("hnsw", "histogram_hnsw"),
-        ]
 
-        for label, column in INDICES:
-            start = time.perf_counter()
-            _ = cur.execute(
-                f"select filename from {table_name} order by {column} <=> %s limit %s",
-                (str(hist), k),
-            )
-            rows = cur.fetchall()
-            elapsed_ms = (time.perf_counter() - start) * 1000
+        _ = cur.execute(
+            f"select filename from {table_name} order by {column} <=> %s limit %s",
+            (str(hist), k),
+        )
+        rows = cur.fetchall()
+        elapsed_ms = (time.perf_counter() - start) * 1000
 
-            results[label] = KnnResult(
-                [row[0] for row in rows],
-                round(elapsed_ms, 2),
-            )
-
-    return results
+        return KnnResult(
+            [row[0] for row in rows],
+            round(elapsed_ms, 2),
+        )
 
 
 def compute_query_histogram(
