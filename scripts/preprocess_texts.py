@@ -349,63 +349,61 @@ def main():
 
     use_stemming = not args.no_stemming
 
-    print(f"Building codebook... (k = {args.codebook_size})")
-    words, chunk_count = build_codebook_from_files(
+    print("Building vocabulary...")
+    terms, document_count = build_vocabulary_from_files(
         filenames,
-        args.codebook_size,
         args.language,
-        args.min_chars,
         args.min_token_len,
         use_stemming,
     )
-    if chunk_count == 0:
-        raise Exception("no text chunks found")
+    if document_count == 0:
+        raise Exception("no text documents found")
 
-    print(f"Found {chunk_count} chunks")
+    print(f"Found {document_count} documents")
 
-    if not words:
-        raise Exception("empty text codebook")
+    if not terms:
+        raise Exception("empty text vocabulary")
 
-    word_to_id = {word: i for i, word in enumerate(words)}
+    term_to_id = {term: i for i, term in enumerate(terms)}
 
     tmp_dir = args.tmp_dir or args.output_dir / "tmp"
 
     print("Building inverted index...")
     os.makedirs(args.output_dir, exist_ok=True)
-    chunks_writer = JsonArrayWriter(args.output_dir / "chunks.json")
+    documents_writer = JsonArrayWriter(args.output_dir / "documents.json")
     media_files_writer = JsonArrayWriter(args.output_dir / "media_files.json")
 
     try:
         block_files = build_spimi_block_files(
-            shared.text.yield_text_chunks(filenames, min_chars=args.min_chars),
-            chunk_count,
-            word_to_id,
+            shared.text.yield_text_documents(filenames),
+            document_count,
+            term_to_id,
             args.language,
             args.min_token_len,
             use_stemming,
             args.block_size,
             tmp_dir,
-            chunks_writer,
+            documents_writer,
             media_files_writer,
         )
     finally:
-        chunks_writer.close()
+        documents_writer.close()
         media_files_writer.close()
 
-    raw_files = merge_block_files(block_files, len(words))
+    raw_files = merge_block_files(block_files, len(terms))
 
     print("Computing TF-IDF weighted index...")
     index, df, lengths, weighted_hists = compute_weighted_index_files(
         raw_files,
         args.output_dir,
-        len(words),
-        chunk_count,
+        len(terms),
+        document_count,
         args.save_json_index,
         args.save_dense_histograms,
     )
 
     print("Saving...")
-    save_outputs(args.output_dir, words, index, df, lengths, weighted_hists)
+    save_outputs(args.output_dir, terms, index, df, lengths, weighted_hists)
 
     if not args.keep_tmp:
         shutil.rmtree(tmp_dir, ignore_errors=True)
