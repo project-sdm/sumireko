@@ -1,4 +1,20 @@
 services:
+  sumireko:
+    container_name: "sumireko"
+    build: "."
+    ports:
+      - "8000:8000"
+    environment:
+      PGHOST: "postgres"
+      PGPORT: "5432"
+      PGDATABASE: "postgres"
+      PGUSER: "postgres"
+      PGPASSWORD: "123"
+    depends_on:
+      - "postgres"
+    volumes:
+      - "./media:/app/media"
+
   postgres:
     container_name: "sumireko-postgres"
     image: "pgvector/pgvector:pg18"
