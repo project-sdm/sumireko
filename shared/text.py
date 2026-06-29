@@ -58,6 +58,33 @@ def get_stopwords(language: str) -> set[str]:
     raise ValueError(f"unsupported language: {language}")
 
 
+def normalize_tokens(
+    text: str,
+    language: str = "spanish",
+    min_token_len: int = 2,
+    use_stemming: bool = True,
+) -> list[str]:
+    stopwords = get_stopwords(language)
+    stemmer = _build_stemmer(language) if use_stemming else None
+
+    tokens: list[str] = []
+    for match in TOKEN_RE.finditer(text.lower()):
+        token = match.group(0).strip(string.punctuation)
+
+        if len(token) < min_token_len:
+            continue
+
+        if token in stopwords:
+            continue
+
+        if stemmer is not None:
+            token = stemmer.stem(token)
+
+        tokens.append(token)
+
+    return tokens
+
+
 def _library_stopwords(language: str) -> set[str]:
     try:
         return set(nltk_stopwords.words(language))
