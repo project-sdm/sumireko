@@ -31,3 +31,15 @@ def read_text_file(path: Path) -> str:
         return path.read_text(encoding="utf-8")
     except UnicodeDecodeError:
         return path.read_text(encoding="latin-1")
+
+
+def iter_text_chunks(paths: list[Path], min_chars: int = 1) -> list[TextChunk]:
+    chunks: list[TextChunk] = []
+
+    for path in paths:
+        paragraphs = split_paragraphs(read_text_file(path), min_chars=min_chars)
+
+        for ordinal, paragraph in enumerate(paragraphs):
+            chunks.append(TextChunk(path.name, ordinal, paragraph))
+
+    return chunks
