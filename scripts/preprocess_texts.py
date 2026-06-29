@@ -134,15 +134,25 @@ def build_spimi_block_files(
     return block_files
 
 
-def merge_blocks(
-    blocks: list[list[list[tuple[int, int]]]],
+def merge_block_files(
+    block_files: list[BlockFiles],
     bow_len: int,
 ) -> list[list[tuple[int, int]]]:
     merged: list[list[tuple[int, int]]] = _empty_block(bow_len)
 
-    for block in blocks:
-        for word_id, postings in enumerate(block):
-            merged[word_id].extend(postings)
+    for block in block_files:
+        with open(block.lexicon_path, "rb") as lexicon_file:
+            lexicon = read_lexicon(lexicon_file)
+
+        with open(block.postings_path, "rb") as postings_file:
+            for word_id, entry in lexicon.items():
+                merged[word_id].extend(
+                    read_raw_postings(
+                        postings_file,
+                        entry.offset,
+                        entry.posting_count,
+                    )
+                )
 
     for postings in merged:
         postings.sort(key=lambda posting: posting[0])
