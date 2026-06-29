@@ -63,26 +63,26 @@ def preprocess(
     index: list[list[tuple[int, float]]] = [[] for _ in range(bow_len)]
     lengths = np.zeros(n, dtype=np.float32)
 
-    for word_id, hist in enumerate(hists):
+    for media_id, hist in enumerate(hists):
         for centroid_id, tf in enumerate(hist):
             if tf == 0:
                 continue
 
             w = shared.weight(n, tf, df[centroid_id])
-            lengths[word_id] += w**2
-            index[centroid_id].append((word_id, w))
+            lengths[media_id] += w**2
+            index[centroid_id].append((media_id, w))
 
     lengths = np.sqrt(lengths)
 
     print("Computing TF-IDF weighted histograms...")
     weighted_hists = np.zeros((n, bow_len), dtype=np.float32)
 
-    for word_id, hist in enumerate(hists):
+    for media_id, hist in enumerate(hists):
         for centroid_id, tf in enumerate(hist):
             if tf == 0:
                 continue
 
-            weighted_hists[word_id, centroid_id] = shared.weight(n, tf, df[centroid_id])
+            weighted_hists[media_id, centroid_id] = shared.weight(n, tf, df[centroid_id])
 
     print("Saving...")
     os.makedirs(output_dir, exist_ok=True)
