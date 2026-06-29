@@ -1,5 +1,7 @@
 import functools
 import re
+import string
+from collections.abc import Iterator
 from collections import Counter
 from dataclasses import dataclass
 from pathlib import Path
@@ -11,19 +13,13 @@ TOKEN_RE = re.compile(r"[a-zA-ZÀ-ÿ0-9]+")
 
 
 @dataclass(frozen=True)
-class TextChunk:
+class TextDocument:
     source: str
-    ordinal: int
     text: str
 
     @property
     def identifier(self) -> str:
-        return f"{self.source}#chunk_{self.ordinal}"
-
-
-def split_paragraphs(content: str, min_chars: int = 1) -> list[str]:
-    paragraphs = [part.strip() for part in re.split(r"\n\s*\n+", content)]
-    return [paragraph for paragraph in paragraphs if len(paragraph) >= min_chars]
+        return self.source
 
 
 def read_text_file(path: Path) -> str:
@@ -33,16 +29,13 @@ def read_text_file(path: Path) -> str:
         return path.read_text(encoding="latin-1")
 
 
-def iter_text_chunks(paths: list[Path], min_chars: int = 1) -> list[TextChunk]:
-    chunks: list[TextChunk] = []
-
+def yield_text_documents(paths: list[Path]) -> Iterator[TextDocument]:
     for path in paths:
-        paragraphs = split_paragraphs(read_text_file(path), min_chars=min_chars)
+        yield TextDocument(path.name, read_text_file(path))
 
-        for ordinal, paragraph in enumerate(paragraphs):
-            chunks.append(TextChunk(path.name, ordinal, paragraph))
 
-    return chunks
+def iter_text_documents(paths: list[Path]) -> list[TextDocument]:
+    return list(yield_text_documents(paths))
 
 
 def get_stopwords(language: str) -> set[str]:
