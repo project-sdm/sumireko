@@ -45,6 +45,8 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--min-token-len", type=int, default=2)
     parser.add_argument("--no-stemming", action="store_true")
     parser.add_argument("--block-size", type=int, default=5000)
+    parser.add_argument("--tmp-dir", type=Path)
+    parser.add_argument("--keep-tmp", action="store_true")
     return parser.parse_args()
 
 
