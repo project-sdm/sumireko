@@ -105,5 +105,31 @@ def merge_blocks(
     return merged
 
 
+def compute_weighted_index(
+    raw_index: list[list[tuple[int, int]]],
+    chunk_count: int,
+) -> tuple[list[list[tuple[int, float]]], np.ndarray, np.ndarray, np.ndarray]:
+    bow_len = len(raw_index)
+    df = np.zeros(bow_len, dtype=np.uint32)
+    lengths = np.zeros(chunk_count, dtype=np.float32)
+    weighted_hists = np.zeros((chunk_count, bow_len), dtype=np.float32)
+    weighted_index: list[list[tuple[int, float]]] = [[] for _ in range(bow_len)]
+
+    for word_id, postings in enumerate(raw_index):
+        df[word_id] = len(postings)
+
+    for word_id, postings in enumerate(raw_index):
+        for chunk_id, tf in postings:
+            weight = shared.weight(chunk_count, tf, int(df[word_id]))
+            lengths[chunk_id] += weight**2
+            weighted_hists[chunk_id, word_id] = weight
+            weighted_index[word_id].append((chunk_id, weight))
+
+    for chunk_id in range(chunk_count):
+        lengths[chunk_id] = math.sqrt(lengths[chunk_id])
+
+    return weighted_index, df, lengths, weighted_hists
+
+
 def _empty_block(bow_len: int) -> list[list[tuple[int, int]]]:
     return [[] for _ in range(bow_len)]
