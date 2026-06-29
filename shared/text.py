@@ -43,3 +43,16 @@ def iter_text_chunks(paths: list[Path], min_chars: int = 1) -> list[TextChunk]:
             chunks.append(TextChunk(path.name, ordinal, paragraph))
 
     return chunks
+
+
+def get_stopwords(language: str) -> set[str]:
+    if language == "spanish":
+        return _library_stopwords("spanish")
+
+    if language == "english":
+        return _library_stopwords("english")
+
+    if language == "multilingual":
+        return _library_stopwords("spanish") | _library_stopwords("english")
+
+    raise ValueError(f"unsupported language: {language}")
