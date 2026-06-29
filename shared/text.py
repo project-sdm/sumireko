@@ -1,6 +1,5 @@
 import functools
 import re
-import string
 from collections import Counter
 from dataclasses import dataclass
 from pathlib import Path
@@ -70,7 +69,7 @@ def normalize_tokens(
 
     tokens: list[str] = []
     for match in TOKEN_RE.finditer(text.lower()):
-        token = match.group(0).strip(string.punctuation)
+        token = match.group(0)
 
         if len(token) < min_token_len:
             continue
