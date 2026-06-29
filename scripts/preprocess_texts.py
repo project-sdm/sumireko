@@ -131,5 +131,45 @@ def compute_weighted_index(
     return weighted_index, df, lengths, weighted_hists
 
 
+def save_outputs(
+    output_dir: Path,
+    words: list[str],
+    chunks: list[shared.text.TextChunk],
+    index: list[list[tuple[int, float]]],
+    df: np.ndarray,
+    lengths: np.ndarray,
+    weighted_hists: np.ndarray,
+):
+    os.makedirs(output_dir, exist_ok=True)
+
+    np.save(output_dir / "words.npy", np.array(words, dtype=str))
+    np.save(output_dir / "df.npy", df)
+    np.save(output_dir / "lengths.npy", lengths)
+    np.save(output_dir / "histograms.npy", weighted_hists)
+
+    with open(output_dir / "media_files.json", "w") as f:
+        json.dump([chunk.identifier for chunk in chunks], f)
+
+    with open(output_dir / "index.json", "w") as f:
+        json.dump(index, f)
+
+    with open(output_dir / "chunks.json", "w") as f:
+        json.dump(
+            [
+                {
+                    "id": chunk.identifier,
+                    "source": chunk.source,
+                    "ordinal": chunk.ordinal,
+                    "text": chunk.text,
+                }
+                for chunk in chunks
+            ],
+            f,
+        )
+
+    with open(output_dir / "word_to_id.json", "w") as f:
+        json.dump({word: i for i, word in enumerate(words)}, f)
+
+
 def _empty_block(bow_len: int) -> list[list[tuple[int, int]]]:
     return [[] for _ in range(bow_len)]
