@@ -144,7 +144,6 @@ def build_spimi_block_files(
     block_size: int,
     tmp_dir: Path,
     documents_writer: JsonArrayWriter,
-    media_files_writer: JsonArrayWriter,
 ) -> list[BlockFiles]:
     block_files: list[BlockFiles] = []
     current = _empty_block(len(term_to_id))
@@ -153,7 +152,6 @@ def build_spimi_block_files(
 
     for document_id, document in enumerate(documents):
         meter.record(document_id / document_count)
-        media_files_writer.write(document.identifier)
         documents_writer.write(
             {
                 "id": document.identifier,
@@ -341,7 +339,6 @@ def main():
     print("Building inverted index...")
     os.makedirs(args.output_dir, exist_ok=True)
     documents_writer = JsonArrayWriter(args.output_dir / "documents.json")
-    media_files_writer = JsonArrayWriter(args.output_dir / "media_files.json")
 
     try:
         block_files = build_spimi_block_files(
@@ -354,11 +351,9 @@ def main():
             args.block_size,
             tmp_dir,
             documents_writer,
-            media_files_writer,
         )
     finally:
         documents_writer.close()
-        media_files_writer.close()
 
     raw_files = merge_block_files(block_files, len(terms))
 
