@@ -54,11 +54,10 @@ async def image_search(req: Request, file: UploadFile, k: int | None = 5):
     data = state.image_data
 
     q_img = shared.image.downscale(await read_file_as_img(file))
-
     _, q_desc = state.sift.detectAndCompute(q_img, None)
-    top_files = knn(q_desc, data, k)
 
-    return {"results": [f"{path}" for path in top_files]}
+    top_files = knn(q_desc, data, k)
+    return {"results": top_files}
 
 
 @dataclass

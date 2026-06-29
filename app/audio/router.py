@@ -44,5 +44,4 @@ async def audio_search(req: Request, file: UploadFile, k: int | None = 5):
         raise HTTPException(status_code=400, detail="Could not extract MFCCs")
 
     top_files = knn(q_desc, data, k)
-
-    return {"results": [f"{path}" for path in top_files]}
+    return {"results": top_files}
