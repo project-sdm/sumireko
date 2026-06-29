@@ -69,3 +69,24 @@ def write_weighted_postings(
 
     _check_uint32(len(postings), "posting_count")
     return offset, len(postings)
+
+
+def read_weighted_postings(
+    file: BinaryIO,
+    offset: int,
+    posting_count: int,
+) -> list[tuple[int, float]]:
+    _check_uint64(offset, "offset")
+    _check_uint32(posting_count, "posting_count")
+
+    file.seek(offset)
+    postings: list[tuple[int, float]] = []
+
+    for _ in range(posting_count):
+        raw = file.read(WEIGHTED_POSTING.size)
+        if len(raw) != WEIGHTED_POSTING.size:
+            raise EOFError("unexpected end of weighted postings file")
+
+        postings.append(WEIGHTED_POSTING.unpack(raw))
+
+    return postings
