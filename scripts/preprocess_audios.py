@@ -6,6 +6,7 @@ import librosa
 import numpy as np
 
 import scripts.shared
+from scripts.shared import ProgressMeter
 
 PRE_EMPHASIS = 0.97
 OUTPUT_DIR = Path(".data/audios")
@@ -24,17 +25,12 @@ def main():
     print("Extracting features...")
     all_descriptors: list[np.ndarray] = []
 
-    next_step = 0
+    meter = ProgressMeter(0.0001)
 
     for i, filename in enumerate(filenames):
+        meter.record(i / len(filenames))
+
         path = audios_dir / filename
-        progress = 100 * (i / len(filenames))
-
-        if progress >= next_step:
-            print(f"Progress: {round(progress, 2)}%")
-
-            while progress >= next_step:
-                next_step += 0.01
 
         try:
             audio, sr = librosa.load(path, sr=None)
@@ -58,7 +54,7 @@ def main():
         if len(d) > 0:
             all_descriptors.append(d)
 
-    print("Progress: 100%")
+    meter.record(1)
 
     scripts.shared.preprocess(all_descriptors, filenames, output_dir=OUTPUT_DIR)
 

@@ -7,6 +7,7 @@ from cv2.typing import MatLike
 
 import scripts.shared
 import shared.image
+from scripts.shared import ProgressMeter
 
 OUTPUT_DIR = Path(".data/images")
 
@@ -25,17 +26,12 @@ def main():
     all_descriptors: list[MatLike] = []
 
     sift = cv2.SIFT.create()
-    next_step = 0
+    meter = ProgressMeter(0.0001)
 
     for i, filename in enumerate(filenames):
+        meter.record(i / len(filenames))
+
         path = images_dir / filename
-        progress = 100 * (i / len(filenames))
-
-        if progress >= next_step:
-            print(f"Progress: {round(progress, 2)}%")
-
-            while progress >= next_step:
-                next_step += 0.01
 
         img = cv2.imread(path)
         assert img is not None, f"Failed to load {path}"
@@ -45,7 +41,7 @@ def main():
         if d is not None:
             all_descriptors.append(d)
 
-    print("Progress: 100%")
+    meter.record(1)
 
     scripts.shared.preprocess(all_descriptors, filenames, output_dir=OUTPUT_DIR)
 

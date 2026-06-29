@@ -1,13 +1,26 @@
 import json
 import math
 import os
+from dataclasses import dataclass
 from pathlib import Path
 
 import faiss
 import numpy as np
 
 import shared
-from app.common.state import PreprocessedData
+
+
+@dataclass
+class ProgressMeter:
+    step: float
+    next_threshold: float = 0.0
+
+    def record(self, progress: float):
+        if progress >= self.next_threshold:
+            print(f"Progress: {round(100 * progress, 2)}%")
+
+            while progress >= self.next_threshold:
+                self.next_threshold += self.step
 
 
 def preprocess(
