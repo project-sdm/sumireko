@@ -5,6 +5,7 @@ import os
 import shutil
 import sys
 from collections import Counter
+from collections.abc import Iterable
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -51,20 +52,44 @@ def parse_args() -> argparse.Namespace:
 
 
 def build_codebook(
-    chunks: list[shared.text.TextChunk],
+    chunks: Iterable[shared.text.TextChunk],
     codebook_size: int,
     language: str,
     min_token_len: int,
     use_stemming: bool,
-) -> list[str]:
-    counts = shared.text.collection_term_counts(
-        chunks,
-        language=language,
-        min_token_len=min_token_len,
-        use_stemming=use_stemming,
-    )
+) -> tuple[list[str], int]:
+    counts: Counter[str] = Counter()
+    chunk_count = 0
 
-    return [term for term, _ in counts.most_common(codebook_size)]
+    for chunk in chunks:
+        chunk_count += 1
+        counts.update(
+            shared.text.normalize_tokens(
+                chunk.text,
+                language=language,
+                min_token_len=min_token_len,
+                use_stemming=use_stemming,
+            )
+        )
+
+    return [term for term, _ in counts.most_common(codebook_size)], chunk_count
+
+
+def build_codebook_from_files(
+    filenames: list[Path],
+    codebook_size: int,
+    language: str,
+    min_chars: int,
+    min_token_len: int,
+    use_stemming: bool,
+) -> tuple[list[str], int]:
+    return build_codebook(
+        shared.text.yield_text_chunks(filenames, min_chars=min_chars),
+        codebook_size,
+        language,
+        min_token_len,
+        use_stemming,
+    )
 
 
 def flush_raw_block(
