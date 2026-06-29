@@ -24,3 +24,10 @@ class TextChunk:
 def split_paragraphs(content: str, min_chars: int = 1) -> list[str]:
     paragraphs = [part.strip() for part in re.split(r"\n\s*\n+", content)]
     return [paragraph for paragraph in paragraphs if len(paragraph) >= min_chars]
+
+
+def read_text_file(path: Path) -> str:
+    try:
+        return path.read_text(encoding="utf-8")
+    except UnicodeDecodeError:
+        return path.read_text(encoding="latin-1")
