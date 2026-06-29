@@ -1,6 +1,7 @@
 import json
 import math
 import os
+from pathlib import Path
 
 import faiss
 import numpy as np
@@ -9,7 +10,7 @@ import numpy as np
 def preprocess(
     all_descriptors: list[np.ndarray],
     filenames: list[str],
-    output_dir: str,
+    output_dir: Path,
     bow_len: int = 1000,
     kmeans_iter: int = 100,
 ):
@@ -59,19 +60,28 @@ def preprocess(
     for audio_id in range(n):
         lengths[audio_id] = math.sqrt(lengths[audio_id])
 
+    print("Computing TF-IDF weighted histograms...")
+    weighted_hists = np.zeros((n, bow_len), dtype=np.float32)
+    for img_id, hist in enumerate(hists):
+        for word_id, tf in enumerate(hist):
+            if tf == 0:
+                continue
+            weighted_hists[img_id, word_id] = weight(word_id, tf)
+
     print("Saving...")
     os.makedirs(output_dir, exist_ok=True)
 
-    np.save(f"{output_dir}/words.npy", words)
-    np.save(f"{output_dir}/df.npy", df)
-    np.save(f"{output_dir}/lengths.npy", lengths)
+    np.save(output_dir / "words.npy", words)
+    np.save(output_dir / "df.npy", df)
+    np.save(output_dir / "lengths.npy", lengths)
+    np.save(output_dir / "histograms.npy", weighted_hists)
 
-    faiss.write_index(word_index, f"{output_dir}/word_index.faiss")
+    faiss.write_index(word_index, str(output_dir / "word_index.faiss"))
 
-    with open(f"{output_dir}/media_files.json", "w") as f:
+    with open(output_dir / "media_files.json", "w") as f:
         json.dump(filenames, f)
 
-    with open(f"{output_dir}/index.json", "w") as f:
+    with open(output_dir / "index.json", "w") as f:
         json.dump(index, f)
 
     print("Done.")

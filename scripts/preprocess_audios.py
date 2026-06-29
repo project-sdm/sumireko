@@ -1,5 +1,6 @@
 import os
 import sys
+from pathlib import Path
 
 import librosa
 import numpy as np
@@ -7,27 +8,27 @@ import numpy as np
 import scripts.shared
 
 PRE_EMPHASIS = 0.97
-OUTPUT_DIR = ".data/audios"
+OUTPUT_DIR = Path(".data/audios")
 
 
 def main():
     if len(sys.argv) < 2:
         raise Exception("must provide a path to the audios folder")
 
-    audios_dir = sys.argv[1]
-    print(f"Reading '{audios_dir}'...")
+    audios_dir = Path(sys.argv[1])
 
+    print(f"Reading '{audios_dir}'...")
     filenames = os.listdir(audios_dir)
-    paths = [f"{audios_dir}/{filename}" for filename in filenames]
-    print(f"Found {len(paths)} audios")
+    print(f"Found {len(filenames)} audios")
 
     print("Extracting features...")
     all_descriptors: list[np.ndarray] = []
 
     next_step = 0
 
-    for i, path in enumerate(paths):
-        progress = 100 * (i / len(paths))
+    for i, filename in enumerate(filenames):
+        path = audios_dir / filename
+        progress = 100 * (i / len(filenames))
 
         if progress >= next_step:
             print(f"Progress: {round(progress, 2)}%")

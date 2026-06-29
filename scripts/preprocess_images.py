@@ -1,5 +1,6 @@
 import os
 import sys
+from pathlib import Path
 
 import cv2
 from cv2.typing import MatLike
@@ -7,17 +8,17 @@ from cv2.typing import MatLike
 import scripts.shared
 import shared.image
 
-OUTPUT_DIR = ".data/images"
+OUTPUT_DIR = Path(".data/images")
 
 
 def main():
     if len(sys.argv) < 2:
         raise Exception("must provide a path to the images folder")
 
-    images_dir = sys.argv[1]
+    images_dir = Path(sys.argv[1])
 
     print(f"Reading '{images_dir}'...")
-    filenames = os.listdir(images_dir)
+    filenames = os.listdir(images_dir)[:10]
     print(f"Found {len(filenames)} images")
 
     print("Extracting features...")
@@ -27,7 +28,7 @@ def main():
     next_step = 0
 
     for i, filename in enumerate(filenames):
-        path = f"{images_dir}/{filename}"
+        path = images_dir / filename
         progress = 100 * (i / len(filenames))
 
         if progress >= next_step:
