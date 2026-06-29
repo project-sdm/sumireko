@@ -6,6 +6,9 @@ from pathlib import Path
 import faiss
 import numpy as np
 
+import shared
+from app.common.state import PreprocessedData
+
 
 def preprocess(
     all_descriptors: list[np.ndarray],
@@ -20,6 +23,7 @@ def preprocess(
     kmeans = faiss.Kmeans(
         points.shape[1], bow_len, niter=kmeans_iter, gpu=True, verbose=True
     )
+
     kmeans.train(points)
     words = kmeans.centroids
     assert words is not None
@@ -28,14 +32,15 @@ def preprocess(
     word_index.add(words)
 
     print("Computing histograms...")
-    hists = []
+    hists: list[np.ndarray] = []
+
     for desc in all_descriptors:
         _, labels = word_index.search(desc, 1)
         hists.append(np.bincount(labels.ravel(), minlength=bow_len))
 
     print("Building inverted index...")
 
-    df = np.zeros(bow_len)
+    df = np.zeros(bow_len, dtype=np.uint32)
 
     for hist in hists:
         for word_id, tf in enumerate(hist):
@@ -44,16 +49,14 @@ def preprocess(
 
     n = len(filenames)
     index: list[list[tuple[int, float]]] = [[] for _ in range(bow_len)]
-    lengths = np.zeros(n)
-
-    def weight(word_id: int, tf: int) -> float:
-        return math.log(1 + tf) * math.log((n + 1) / (df[word_id] + 1))
+    lengths = np.zeros(n, dtype=np.float32)
 
     for audio_id, hist in enumerate(hists):
         for word_id, tf in enumerate(hist):
             if tf == 0:
                 continue
-            w = weight(word_id, tf)
+
+            w = shared.weight(n, tf, df[word_id])
             lengths[audio_id] += w**2
             index[word_id].append((audio_id, w))
 
@@ -62,11 +65,13 @@ def preprocess(
 
     print("Computing TF-IDF weighted histograms...")
     weighted_hists = np.zeros((n, bow_len), dtype=np.float32)
+
     for img_id, hist in enumerate(hists):
         for word_id, tf in enumerate(hist):
             if tf == 0:
                 continue
-            weighted_hists[img_id, word_id] = weight(word_id, tf)
+
+            weighted_hists[img_id, word_id] = shared.weight(n, tf, df[word_id])
 
     print("Saving...")
     os.makedirs(output_dir, exist_ok=True)

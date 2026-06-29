@@ -5,6 +5,7 @@ import faiss
 import numpy as np
 import numpy.typing as npt
 from cv2.typing import MatLike
+from psycopg_pool import ConnectionPool
 from starlette.datastructures import State
 
 
@@ -23,3 +24,4 @@ class AppState(State):
     sift: cv2.SIFT
     image_data: PreprocessedData
     audio_data: PreprocessedData
+    db: ConnectionPool

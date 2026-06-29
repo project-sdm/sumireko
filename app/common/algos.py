@@ -1,18 +1,27 @@
 import math
+import time
+from dataclasses import dataclass
 
 import numpy as np
+from psycopg import Connection
 
+import shared
 from app.common.state import PreprocessedData
 
 
-def knn(descriptors: np.ndarray, data: PreprocessedData, k: int | None):
+@dataclass
+class KnnResult:
+    results: list[str]
+    time_ms: float
+
+
+def knn(descriptors: np.ndarray, data: PreprocessedData, k: int | None) -> KnnResult:
+    start = time.perf_counter()
+
     _, labels = data.word_index.search(descriptors, 1)
     q_hist = np.bincount(labels.ravel(), minlength=len(data.words))
 
     n = len(data.media_files)
-
-    def weight(word_id: int, tf: int) -> float:
-        return math.log(1 + tf) * math.log((n + 1) / (data.df[word_id] + 1))
 
     scores: dict[int, float] = {}
     query_len_sq = 0.0
@@ -21,7 +30,7 @@ def knn(descriptors: np.ndarray, data: PreprocessedData, k: int | None):
         if tf_query == 0:
             continue
 
-        w_query = weight(word_id, tf_query)
+        w_query = shared.weight(n, tf_query, data.df[word_id])
         query_len_sq += w_query**2
 
         for img_id, w_img in data.index[word_id]:
@@ -33,6 +42,58 @@ def knn(descriptors: np.ndarray, data: PreprocessedData, k: int | None):
         scores[img_id] /= data.lengths[img_id] * query_length
 
     result = sorted(scores.items(), key=lambda tup: tup[1], reverse=True)
+
+    elapsed_ms = (time.perf_counter() - start) * 1000
+
     top_files = [data.media_files[i] for i, _ in result[:k]]
 
-    return top_files
+    return KnnResult(top_files, elapsed_ms)
+
+
+def knn_postgres(
+    conn: Connection, table_name: str, hist: list[float], k: int
+) -> dict[str, KnnResult]:
+    results: dict[str, KnnResult] = {}
+
+    with conn.cursor() as cur:
+        INDICES = [
+            ("brute", "histogram_brute"),
+            ("ivfflat", "histogram_ivf"),
+            ("hnsw", "histogram_hnsw"),
+        ]
+
+        for label, column in INDICES:
+            start = time.perf_counter()
+            _ = cur.execute(
+                f"select filename from {table_name} order by {column} <=> %s limit %s",
+                (str(hist), k),
+            )
+            rows = cur.fetchall()
+            elapsed_ms = (time.perf_counter() - start) * 1000
+
+            results[label] = KnnResult(
+                [row[0] for row in rows],
+                round(elapsed_ms, 2),
+            )
+
+    return results
+
+
+def compute_query_histogram(
+    descriptors: np.ndarray,
+    data: PreprocessedData,
+) -> list[float]:
+    _, labels = data.word_index.search(descriptors, 1)
+    q_hist = np.bincount(labels.ravel(), minlength=len(data.words))
+
+    n = len(data.media_files)
+
+    weighted = np.zeros(len(data.words), dtype=np.float32)
+
+    for word_id, tf in enumerate(q_hist):
+        if tf == 0:
+            continue
+
+        weighted[word_id] = shared.weight(n, tf, data.df[word_id])
+
+    return weighted.tolist()

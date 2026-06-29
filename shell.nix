@@ -14,6 +14,7 @@ pkgs.mkShell {
         python-multipart
         faiss
         psycopg
+        psycopg-pool
       ]
     ))
   ];

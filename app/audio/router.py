@@ -3,9 +3,10 @@ from typing import cast
 
 import librosa
 import numpy as np
+from cv2.typing import MatLike
 from fastapi import APIRouter, HTTPException, Request, UploadFile
 
-from app.common.algos import knn
+import app.common.algos as algos
 from app.common.state import AppState
 
 audio_router = APIRouter(prefix="/audio", tags=["audio"])
@@ -13,11 +14,7 @@ audio_router = APIRouter(prefix="/audio", tags=["audio"])
 PRE_EMPHASIS = 0.97
 
 
-@audio_router.post("/search")
-async def audio_search(req: Request, file: UploadFile, k: int | None = 5):
-    state = cast(AppState, req.app.state)
-    data = state.audio_data
-
+async def extract_descriptors(file: UploadFile) -> MatLike:
     try:
         q_contents = await file.read()
         q_audio, sr = librosa.load(BytesIO(q_contents), sr=None)
@@ -43,5 +40,22 @@ async def audio_search(req: Request, file: UploadFile, k: int | None = 5):
     if len(q_desc) == 0:
         raise HTTPException(status_code=400, detail="Could not extract MFCCs")
 
-    top_files = knn(q_desc, data, k)
-    return {"results": top_files}
+    return q_desc
+
+
+@audio_router.post("/search")
+async def audio_search(req: Request, file: UploadFile, k: int | None = 5):
+    state = cast(AppState, req.app.state)
+    q_desc = await extract_descriptors(file)
+
+    return algos.knn(q_desc, state.audio_data, k)
+
+
+@audio_router.post("/search-pgvector")
+async def audio_search(req: Request, file: UploadFile, k: int | None = 5):
+    state = cast(AppState, req.app.state)
+    q_desc = await extract_descriptors(file)
+    q_hist = algos.compute_query_histogram(q_desc, state.audio_data)
+
+    with state.db.connection() as conn:
+        return algos.knn_postgres(conn, "audios", q_hist, k)

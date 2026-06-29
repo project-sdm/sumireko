@@ -9,6 +9,7 @@ from faiss import IndexFlatL2
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
+from psycopg_pool import ConnectionPool
 
 import app.postgres as postgres
 from app.audio.router import audio_router
@@ -55,6 +56,9 @@ async def lifespan(app: FastAPI):
     app.state.sift = cv2.SIFT.create()
     app.state.image_data = load_preprocessed("IMAGE", IMAGES_PATH)
     app.state.audio_data = load_preprocessed("AUDIO", AUDIOS_PATH)
+
+    app.state.db = ConnectionPool(min_size=2, max_size=20)
+
     yield
 
 
