@@ -265,23 +265,30 @@ def main():
 
     word_to_id = {word: i for i, word in enumerate(words)}
 
+    tmp_dir = args.tmp_dir or args.output_dir / "tmp"
+
     print("Building inverted index...")
-    blocks = build_spimi_blocks(
+    block_files = build_spimi_block_files(
         chunks,
         word_to_id,
         args.language,
         args.min_token_len,
         use_stemming,
         args.block_size,
+        tmp_dir,
     )
 
-    raw_index = merge_blocks(blocks, len(words))
+    raw_index = merge_block_files(block_files, len(words))
 
     print("Computing TF-IDF weighted histograms...")
     index, df, lengths, weighted_hists = compute_weighted_index(raw_index, len(chunks))
 
     print("Saving...")
     save_outputs(args.output_dir, words, chunks, index, df, lengths, weighted_hists)
+
+    if not args.keep_tmp:
+        shutil.rmtree(tmp_dir, ignore_errors=True)
+
     print("Done.")
 
 
