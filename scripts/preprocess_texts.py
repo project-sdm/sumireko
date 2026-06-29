@@ -67,6 +67,31 @@ def build_codebook(
     return [term for term, _ in counts.most_common(codebook_size)]
 
 
+def flush_raw_block(
+    block: list[list[tuple[int, int]]],
+    tmp_dir: Path,
+    block_id: int,
+) -> BlockFiles:
+    os.makedirs(tmp_dir, exist_ok=True)
+
+    postings_path = tmp_dir / f"block_{block_id:06d}.postings.bin"
+    lexicon_path = tmp_dir / f"block_{block_id:06d}.lexicon.bin"
+    entries: list[LexiconEntry] = []
+
+    with open(postings_path, "wb") as postings_file:
+        for word_id, postings in enumerate(block):
+            if not postings:
+                continue
+
+            offset, posting_count = write_raw_postings(postings_file, postings)
+            entries.append(LexiconEntry(word_id, offset, posting_count))
+
+    with open(lexicon_path, "wb") as lexicon_file:
+        write_lexicon(lexicon_file, entries)
+
+    return BlockFiles(postings_path, lexicon_path)
+
+
 def build_spimi_blocks(
     chunks: list[shared.text.TextChunk],
     word_to_id: dict[str, int],
