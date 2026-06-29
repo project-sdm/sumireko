@@ -15,21 +15,20 @@ def main():
         raise Exception("must provide a path to the images folder")
 
     images_dir = sys.argv[1]
+
     print(f"Reading '{images_dir}'...")
-
-    sift = cv2.SIFT.create()
-
     filenames = os.listdir(images_dir)
-    paths = [f"{images_dir}/{filename}" for filename in filenames]
-    print(f"Found {len(paths)} images")
+    print(f"Found {len(filenames)} images")
 
     print("Extracting features...")
     all_descriptors: list[MatLike] = []
 
+    sift = cv2.SIFT.create()
     next_step = 0
 
-    for i, path in enumerate(paths):
-        progress = 100 * (i / len(paths))
+    for i, filename in enumerate(filenames):
+        path = f"{images_dir}/{filename}"
+        progress = 100 * (i / len(filenames))
 
         if progress >= next_step:
             print(f"Progress: {round(progress, 2)}%")
@@ -39,7 +38,6 @@ def main():
 
         img = cv2.imread(path)
         assert img is not None, f"Failed to load {path}"
-
         img = shared.image.downscale(img)
 
         _, d = sift.detectAndCompute(img, None)
