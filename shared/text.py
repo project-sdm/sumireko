@@ -56,3 +56,13 @@ def get_stopwords(language: str) -> set[str]:
         return _library_stopwords("spanish") | _library_stopwords("english")
 
     raise ValueError(f"unsupported language: {language}")
+
+
+def _library_stopwords(language: str) -> set[str]:
+    try:
+        return set(nltk_stopwords.words(language))
+    except LookupError as exc:
+        raise LookupError(
+            "NLTK stopwords corpus is required. Install it with: "
+            "python -m nltk.downloader stopwords"
+        ) from exc
