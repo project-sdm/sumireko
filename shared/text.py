@@ -1,6 +1,7 @@
 import re
 import string
 from collections import Counter
+from collections.abc import Iterable, Iterator
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -33,16 +34,16 @@ def read_text_file(path: Path) -> str:
         return path.read_text(encoding="latin-1")
 
 
-def iter_text_chunks(paths: list[Path], min_chars: int = 1) -> list[TextChunk]:
-    chunks: list[TextChunk] = []
-
+def yield_text_chunks(paths: list[Path], min_chars: int = 1) -> Iterator[TextChunk]:
     for path in paths:
         paragraphs = split_paragraphs(read_text_file(path), min_chars=min_chars)
 
         for ordinal, paragraph in enumerate(paragraphs):
-            chunks.append(TextChunk(path.name, ordinal, paragraph))
+            yield TextChunk(path.name, ordinal, paragraph)
 
-    return chunks
+
+def iter_text_chunks(paths: list[Path], min_chars: int = 1) -> list[TextChunk]:
+    return list(yield_text_chunks(paths, min_chars=min_chars))
 
 
 def get_stopwords(language: str) -> set[str]:
@@ -86,7 +87,7 @@ def normalize_tokens(
 
 
 def collection_term_counts(
-    chunks: list[TextChunk],
+    chunks: Iterable[TextChunk],
     language: str = "spanish",
     min_token_len: int = 2,
     use_stemming: bool = True,
