@@ -55,16 +55,14 @@ class JsonArrayWriter:
         self.file.close()
 
 def parse_args() -> argparse.Namespace:
-    parser = argparse.ArgumentParser(description="Preprocess text files into TF-IDF chunks.")
+    parser = argparse.ArgumentParser(description="Preprocess text files into a TF-IDF index.")
     parser.add_argument("texts_dir", type=Path, help="Folder containing .txt files")
     parser.add_argument("--output-dir", type=Path, default=OUTPUT_DIR)
-    parser.add_argument("--codebook-size", type=int, default=1000)
     parser.add_argument(
         "--language",
         choices=["spanish", "english", "multilingual"],
         default="spanish",
     )
-    parser.add_argument("--min-chars", type=int, default=1)
     parser.add_argument("--min-token-len", type=int, default=2)
     parser.add_argument("--no-stemming", action="store_true")
     parser.add_argument("--block-size", type=int, default=5000)
@@ -75,41 +73,38 @@ def parse_args() -> argparse.Namespace:
     return parser.parse_args()
 
 
-def build_codebook(
-    chunks: Iterable[shared.text.TextChunk],
-    codebook_size: int,
+def build_vocabulary(
+    documents: Iterable[shared.text.TextDocument],
     language: str,
     min_token_len: int,
     use_stemming: bool,
 ) -> tuple[list[str], int]:
-    counts: Counter[str] = Counter()
-    chunk_count = 0
+    term_to_id: dict[str, int] = {}
+    document_count = 0
 
-    for chunk in chunks:
-        chunk_count += 1
-        counts.update(
-            shared.text.normalize_tokens(
-                chunk.text,
-                language=language,
-                min_token_len=min_token_len,
-                use_stemming=use_stemming,
-            )
-        )
+    for document in documents:
+        document_count += 1
 
-    return [term for term, _ in counts.most_common(codebook_size)], chunk_count
+        for term in shared.text.normalize_tokens(
+            document.text,
+            language=language,
+            min_token_len=min_token_len,
+            use_stemming=use_stemming,
+        ):
+            if term not in term_to_id:
+                term_to_id[term] = len(term_to_id)
+
+    return list(term_to_id.keys()), document_count
 
 
-def build_codebook_from_files(
+def build_vocabulary_from_files(
     filenames: list[Path],
-    codebook_size: int,
     language: str,
-    min_chars: int,
     min_token_len: int,
     use_stemming: bool,
 ) -> tuple[list[str], int]:
-    return build_codebook(
-        shared.text.yield_text_chunks(filenames, min_chars=min_chars),
-        codebook_size,
+    return build_vocabulary(
+        shared.text.yield_text_documents(filenames),
         language,
         min_token_len,
         use_stemming,
