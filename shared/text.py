@@ -66,3 +66,14 @@ def _library_stopwords(language: str) -> set[str]:
             "NLTK stopwords corpus is required. Install it with: "
             "python -m nltk.downloader stopwords"
         ) from exc
+
+
+def _stemmer_language(language: str) -> str:
+    if language == "english":
+        return "english"
+
+    return "spanish"
+
+
+def _build_stemmer(language: str):
+    return SnowballStemmer(_stemmer_language(language))
