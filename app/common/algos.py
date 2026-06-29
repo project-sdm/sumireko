@@ -46,6 +46,10 @@ def knn(descriptors: np.ndarray, data: PreprocessedData, k: int | None) -> KnnRe
 
     query_length = math.sqrt(query_len_sq)
 
+    if query_length == 0:
+        elapsed_ms = (time.perf_counter() - start) * 1000
+        return KnnResult([], round(elapsed_ms, 2))
+
     for img_id in scores:
         scores[img_id] /= data.lengths[img_id] * query_length
 
