@@ -32,6 +32,27 @@ class BlockFiles:
     postings_path: Path
     lexicon_path: Path
 
+
+@dataclass
+class JsonArrayWriter:
+    path: Path
+    first: bool = True
+
+    def __post_init__(self):
+        self.file = open(self.path, "w")
+        self.file.write("[")
+
+    def write(self, item):
+        if not self.first:
+            self.file.write(",")
+
+        json.dump(item, self.file)
+        self.first = False
+
+    def close(self):
+        self.file.write("]")
+        self.file.close()
+
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description="Preprocess text files into TF-IDF chunks.")
     parser.add_argument("texts_dir", type=Path, help="Folder containing .txt files")
