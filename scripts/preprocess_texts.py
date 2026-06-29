@@ -31,3 +31,20 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--no-stemming", action="store_true")
     parser.add_argument("--block-size", type=int, default=5000)
     return parser.parse_args()
+
+
+def build_codebook(
+    chunks: list[shared.text.TextChunk],
+    codebook_size: int,
+    language: str,
+    min_token_len: int,
+    use_stemming: bool,
+) -> list[str]:
+    counts = shared.text.collection_term_counts(
+        chunks,
+        language=language,
+        min_token_len=min_token_len,
+        use_stemming=use_stemming,
+    )
+
+    return [term for term, _ in counts.most_common(codebook_size)]
