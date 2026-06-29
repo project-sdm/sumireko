@@ -18,7 +18,7 @@ def main():
     images_dir = Path(sys.argv[1])
 
     print(f"Reading '{images_dir}'...")
-    filenames = os.listdir(images_dir)[:10]
+    filenames = os.listdir(images_dir)
     print(f"Found {len(filenames)} images")
 
     print("Extracting features...")
