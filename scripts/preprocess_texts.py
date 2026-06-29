@@ -68,8 +68,6 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--block-size", type=int, default=5000)
     parser.add_argument("--tmp-dir", type=Path)
     parser.add_argument("--keep-tmp", action="store_true")
-    parser.add_argument("--save-json-index", action="store_true")
-    parser.add_argument("--save-dense-histograms", action="store_true")
     return parser.parse_args()
 
 
@@ -239,22 +237,9 @@ def compute_weighted_index_files(
     output_dir: Path,
     term_count: int,
     document_count: int,
-    save_json_index: bool,
-    save_dense_histograms: bool,
-) -> tuple[
-    list[list[tuple[int, float]]] | None,
-    np.ndarray,
-    np.ndarray,
-    np.ndarray | None,
-]:
+) -> tuple[np.ndarray, np.ndarray]:
     df = np.zeros(term_count, dtype=np.uint32)
     lengths = np.zeros(document_count, dtype=np.float32)
-    weighted_hists = (
-        np.zeros((document_count, term_count), dtype=np.float32)
-        if save_dense_histograms
-        else None
-    )
-    weighted_index = [[] for _ in range(term_count)] if save_json_index else None
 
     postings_path = output_dir / "postings.bin"
     lexicon_path = output_dir / "lexicon.bin"
@@ -283,17 +268,11 @@ def compute_weighted_index_files(
                     lengths[document_id] += weight**2
                     weighted_postings.append((document_id, weight))
 
-                    if weighted_hists is not None:
-                        weighted_hists[document_id, word_id] = weight
-
                 offset, posting_count = write_weighted_postings(
                     weighted_postings_file,
                     weighted_postings,
                 )
                 entries.append(LexiconEntry(word_id, offset, posting_count))
-
-                if weighted_index is not None:
-                    weighted_index[word_id].extend(weighted_postings)
 
     with open(lexicon_path, "wb") as lexicon_file:
         write_lexicon(lexicon_file, entries)
@@ -301,29 +280,20 @@ def compute_weighted_index_files(
     for document_id in range(document_count):
         lengths[document_id] = math.sqrt(lengths[document_id])
 
-    return weighted_index, df, lengths, weighted_hists
+    return df, lengths
 
 
 def save_outputs(
     output_dir: Path,
     terms: list[str],
-    index: list[list[tuple[int, float]]] | None,
     df: np.ndarray,
     lengths: np.ndarray,
-    weighted_hists: np.ndarray | None,
 ):
     os.makedirs(output_dir, exist_ok=True)
 
     np.save(output_dir / "terms.npy", np.array(terms, dtype=str))
     np.save(output_dir / "df.npy", df)
     np.save(output_dir / "lengths.npy", lengths)
-
-    if weighted_hists is not None:
-        np.save(output_dir / "histograms.npy", weighted_hists)
-
-    if index is not None:
-        with open(output_dir / "index.json", "w") as f:
-            json.dump(index, f)
 
     with open(output_dir / "term_to_id.json", "w") as f:
         json.dump({term: i for i, term in enumerate(terms)}, f)
@@ -393,17 +363,15 @@ def main():
     raw_files = merge_block_files(block_files, len(terms))
 
     print("Computing TF-IDF weighted index...")
-    index, df, lengths, weighted_hists = compute_weighted_index_files(
+    df, lengths = compute_weighted_index_files(
         raw_files,
         args.output_dir,
         len(terms),
         document_count,
-        args.save_json_index,
-        args.save_dense_histograms,
     )
 
     print("Saving...")
-    save_outputs(args.output_dir, terms, index, df, lengths, weighted_hists)
+    save_outputs(args.output_dir, terms, df, lengths)
 
     if not args.keep_tmp:
         shutil.rmtree(tmp_dir, ignore_errors=True)
