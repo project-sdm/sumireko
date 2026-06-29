@@ -6,7 +6,7 @@ from app.common.exceptions import MissingEnvVariableException
 def load_env(var: str) -> str:
     env = os.getenv(var)
 
-    if not env:
+    if env is None:
         raise MissingEnvVariableException(var)
 
     return env

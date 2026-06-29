@@ -1,5 +1,4 @@
 import json
-import math
 import os
 from dataclasses import dataclass
 from pathlib import Path
@@ -56,35 +55,34 @@ def preprocess(
     df = np.zeros(bow_len, dtype=np.uint32)
 
     for hist in hists:
-        for word_id, tf in enumerate(hist):
+        for centroid_id, tf in enumerate(hist):
             if tf > 0:
-                df[word_id] += 1
+                df[centroid_id] += 1
 
     n = len(filenames)
     index: list[list[tuple[int, float]]] = [[] for _ in range(bow_len)]
     lengths = np.zeros(n, dtype=np.float32)
 
-    for audio_id, hist in enumerate(hists):
-        for word_id, tf in enumerate(hist):
+    for word_id, hist in enumerate(hists):
+        for centroid_id, tf in enumerate(hist):
             if tf == 0:
                 continue
 
-            w = shared.weight(n, tf, df[word_id])
-            lengths[audio_id] += w**2
-            index[word_id].append((audio_id, w))
+            w = shared.weight(n, tf, df[centroid_id])
+            lengths[word_id] += w**2
+            index[centroid_id].append((word_id, w))
 
-    for audio_id in range(n):
-        lengths[audio_id] = math.sqrt(lengths[audio_id])
+    lengths = np.sqrt(lengths)
 
     print("Computing TF-IDF weighted histograms...")
     weighted_hists = np.zeros((n, bow_len), dtype=np.float32)
 
-    for img_id, hist in enumerate(hists):
-        for word_id, tf in enumerate(hist):
+    for word_id, hist in enumerate(hists):
+        for centroid_id, tf in enumerate(hist):
             if tf == 0:
                 continue
 
-            weighted_hists[img_id, word_id] = shared.weight(n, tf, df[word_id])
+            weighted_hists[word_id, centroid_id] = shared.weight(n, tf, df[centroid_id])
 
     print("Saving...")
     os.makedirs(output_dir, exist_ok=True)

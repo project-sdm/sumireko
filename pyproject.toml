@@ -4,15 +4,15 @@ version = "0.1.0"
 description = "Proyecto final de BD2"
 requires-python = ">=3.14"
 dependencies = [
-    "numpy",
-    "fastapi[standard]",
-    "opencv-python-headless",
-    "python-multipart",
     "faiss-cpu",
+    "fastapi[standard]",
     "librosa",
     "nltk",
+    "numpy",
+    "opencv-python-headless",
     "psycopg",
     "psycopg-pool",
+    "python-multipart",
 ]
 
 [tool.setuptools.packages.find]

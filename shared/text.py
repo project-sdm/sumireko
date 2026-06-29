@@ -1,3 +1,4 @@
+import functools
 import re
 import string
 from collections.abc import Iterator
@@ -76,6 +77,28 @@ def normalize_tokens(
     return tokens
 
 
+def collection_term_counts(
+    chunks: list[TextChunk],
+    language: str = "spanish",
+    min_token_len: int = 2,
+    use_stemming: bool = True,
+) -> Counter[str]:
+    counts: Counter[str] = Counter()
+
+    for chunk in chunks:
+        counts.update(
+            normalize_tokens(
+                chunk.text,
+                language=language,
+                min_token_len=min_token_len,
+                use_stemming=use_stemming,
+            )
+        )
+
+    return counts
+
+
+@functools.lru_cache
 def _library_stopwords(language: str) -> set[str]:
     try:
         return set(nltk_stopwords.words(language))
@@ -93,5 +116,6 @@ def _stemmer_language(language: str) -> str:
     return "spanish"
 
 
-def _build_stemmer(language: str):
+@functools.lru_cache
+def _build_stemmer(language: str) -> SnowballStemmer:
     return SnowballStemmer(_stemmer_language(language))

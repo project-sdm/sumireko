@@ -6,15 +6,16 @@ pkgs.mkShell {
     ffmpeg
     (python314.withPackages (
       ps: with ps; [
-        numpy
+        faiss
         fastapi
         fastapi-cli
-        opencv4
         librosa
-        python-multipart
-        faiss
+        nltk
+        numpy
+        opencv4
         psycopg
         psycopg-pool
+        python-multipart
       ]
     ))
   ];
