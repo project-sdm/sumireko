@@ -1,5 +1,6 @@
 import struct
 from collections.abc import BinaryIO, Sequence
+from dataclasses import dataclass
 
 UINT32_MAX = 2**32 - 1
 UINT64_MAX = 2**64 - 1
@@ -7,6 +8,13 @@ UINT64_MAX = 2**64 - 1
 RAW_POSTING = struct.Struct("<II")
 WEIGHTED_POSTING = struct.Struct("<If")
 LEXICON_ENTRY = struct.Struct("<IQI")
+
+
+@dataclass(frozen=True)
+class LexiconEntry:
+    word_id: int
+    offset: int
+    posting_count: int
 
 
 def _check_uint32(value: int, label: str):
@@ -90,3 +98,28 @@ def read_weighted_postings(
         postings.append(WEIGHTED_POSTING.unpack(raw))
 
     return postings
+
+
+def write_lexicon(file: BinaryIO, entries: Sequence[LexiconEntry]):
+    for entry in entries:
+        _check_uint32(entry.word_id, "word_id")
+        _check_uint64(entry.offset, "offset")
+        _check_uint32(entry.posting_count, "posting_count")
+        file.write(LEXICON_ENTRY.pack(entry.word_id, entry.offset, entry.posting_count))
+
+
+def read_lexicon(file: BinaryIO) -> dict[int, LexiconEntry]:
+    entries: dict[int, LexiconEntry] = {}
+
+    while True:
+        raw = file.read(LEXICON_ENTRY.size)
+        if not raw:
+            break
+
+        if len(raw) != LEXICON_ENTRY.size:
+            raise EOFError("unexpected end of lexicon file")
+
+        word_id, offset, posting_count = LEXICON_ENTRY.unpack(raw)
+        entries[word_id] = LexiconEntry(word_id, offset, posting_count)
+
+    return entries
