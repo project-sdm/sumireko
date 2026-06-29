@@ -10,6 +10,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 
+import app.postgres as postgres
 from app.audio.router import audio_router
 from app.common.logger import APP_LOGGER
 from app.common.state import PreprocessedData
@@ -45,9 +46,15 @@ def load_preprocessed(label: str, data_dir: Path) -> PreprocessedData:
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
+    IMAGES_PATH = Path(".data/images")
+    AUDIOS_PATH = Path(".data/audios")
+
+    postgres.init(IMAGES_PATH, "images")
+    postgres.init(AUDIOS_PATH, "audios")
+
     app.state.sift = cv2.SIFT.create()
-    app.state.image_data = load_preprocessed("IMAGE", Path(".data/images"))
-    app.state.audio_data = load_preprocessed("AUDIO", Path(".data/audios"))
+    app.state.image_data = load_preprocessed("IMAGE", IMAGES_PATH)
+    app.state.audio_data = load_preprocessed("AUDIO", AUDIOS_PATH)
     yield
 
 

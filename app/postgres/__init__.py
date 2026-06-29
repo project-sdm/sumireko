@@ -1,37 +1,44 @@
 import json
-import os
-import sys
 from pathlib import Path
 
 import numpy as np
 import psycopg
 
-PREPROCESSED_DIR = Path(".data/images")
-BOW_LEN = 1000
+from app.common.logger import APP_LOGGER
 
 
-def main():
-    histograms_path = PREPROCESSED_DIR / "histograms.npy"
-    media_files_path = PREPROCESSED_DIR / "media_files.json"
+def init(data_dir: Path, table_name:str):
+    APP_LOGGER.info(f"Initializing {table_name} in Postgres...")
+
+    histograms_path = data_dir / "histograms.npy"
+    media_files_path = data_dir / "media_files.json"
 
     hists: np.ndarray = np.load(str(histograms_path))
     with open(media_files_path) as f:
         filenames: list[str] = json.load(f)
 
-    print(f"Loaded {len(filenames)} histograms (dim={hists.shape[1]})")
+    APP_LOGGER.info(f"Loaded {len(filenames)} histograms (dim={hists.shape[1]})")
 
     bow_len = hists.shape[1]
 
     with psycopg.connect() as conn:
         with conn.cursor() as cur:
-            print("Creating pgvector extension...")
+            APP_LOGGER.info("Creating pgvector extension...")
             _ = cur.execute("create extension if not exists vector")
 
-            print("Recreating schema...")
-            _ = cur.execute("drop table if exists images cascade")
+            cur.execute(
+                t"select exists (select 1 from information_schema.tables where table_name = {table_name})"
+            )
+            table_exists = (cur.fetchone() or [False])[0]
+
+            if table_exists:
+                APP_LOGGER.info(f"Table '{table_name}' already exists.")
+                return
+
+            APP_LOGGER.info("Creating schema...")
             _ = cur.execute(
                 f"""
-                create table images (
+                create table {table_name} (
                     id serial primary key,
                     filename varchar not null,
                     histogram_brute vector({bow_len}),
@@ -41,15 +48,15 @@ def main():
                 """
             )
 
-            print(f"Inserting {len(filenames)} rows...")
+            APP_LOGGER.info(f"Inserting {len(filenames)} rows...")
 
             rows = [
                 (filenames[i], hists[i].tolist(), hists[i].tolist(), hists[i].tolist())
                 for i in range(len(filenames))
             ]
             _ = cur.executemany(
-                """
-                insert into images (filename, histogram_brute, histogram_ivf, histogram_hnsw)
+                f"""
+                insert into {table_name} (filename, histogram_brute, histogram_ivf, histogram_hnsw)
                 values (%s, %s, %s, %s)
                 """,
                 rows,
@@ -57,10 +64,10 @@ def main():
             conn.commit()
 
             lists = 100
-            print(f"Building IVFFlat index (lists = {lists})...")
+            APP_LOGGER.info(f"Building IVFFlat index (lists = {lists})...")
             _ = cur.execute(
                 f"""
-                create index idx_images_ivf on images
+                create index idx_{table_name}_ivf on {table_name}
                 using ivfflat (histogram_ivf vector_cosine_ops) with (lists = {lists})
                 """
             )
@@ -68,17 +75,13 @@ def main():
 
             m = 20
             ef = 40
-            print(f"Building HNSW index (m = {m}, ef_construction = {ef})...")
+            APP_LOGGER.info(f"Building HNSW index (m = {m}, ef_construction = {ef})...")
             _ = cur.execute(
                 f"""
-                create index idx_images_hnsw on images
+                create index idx_{table_name}_hnsw on {table_name}
                 using hnsw (histogram_hnsw vector_cosine_ops) with (m = {m}, ef_construction = {ef})
                 """
             )
             conn.commit()
 
-    print("Done.")
-
-
-if __name__ == "__main__":
-    main()
+    APP_LOGGER.info("Done.")
