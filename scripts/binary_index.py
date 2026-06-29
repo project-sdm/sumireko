@@ -1,6 +1,7 @@
 import struct
-from collections.abc import BinaryIO, Sequence
+from collections.abc import Sequence
 from dataclasses import dataclass
+from typing import BinaryIO
 
 UINT32_MAX = 2**32 - 1
 UINT64_MAX = 2**64 - 1
