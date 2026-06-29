@@ -10,6 +10,7 @@ dependencies = [
     "python-multipart",
     "faiss-cpu",
     "librosa",
+    "nltk",
     "psycopg",
     "psycopg-pool",
 ]
