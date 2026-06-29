@@ -89,5 +89,21 @@ def build_spimi_blocks(
     return blocks
 
 
+def merge_blocks(
+    blocks: list[list[list[tuple[int, int]]]],
+    bow_len: int,
+) -> list[list[tuple[int, int]]]:
+    merged: list[list[tuple[int, int]]] = _empty_block(bow_len)
+
+    for block in blocks:
+        for word_id, postings in enumerate(block):
+            merged[word_id].extend(postings)
+
+    for postings in merged:
+        postings.sort(key=lambda posting: posting[0])
+
+    return merged
+
+
 def _empty_block(bow_len: int) -> list[list[tuple[int, int]]]:
     return [[] for _ in range(bow_len)]
