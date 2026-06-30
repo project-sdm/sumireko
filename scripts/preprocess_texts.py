@@ -139,8 +139,7 @@ def spimi_invert(token_stream: TokenStream, block_path: Path, max_memory: int):
     bytes_used = 0
 
     while bytes_used < max_memory and (token := token_stream.next()):
-
-        if not token.term in dictionary:
+        if token.term not in dictionary:
             postings_list = add_to_dictionary(dictionary, token.term)
             bytes_used += 16 + len(token.term)
         else:
