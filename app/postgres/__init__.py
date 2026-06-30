@@ -26,7 +26,7 @@ def init(data_dir: Path, table_name:str):
             APP_LOGGER.info("Creating pgvector extension...")
             _ = cur.execute("create extension if not exists vector")
 
-            cur.execute(
+            _ = cur.execute(
                 t"select exists (select 1 from information_schema.tables where table_name = {table_name})"
             )
             table_exists = (cur.fetchone() or [False])[0]
@@ -50,17 +50,13 @@ def init(data_dir: Path, table_name:str):
 
             APP_LOGGER.info(f"Inserting {len(filenames)} rows...")
 
-            rows = [
-                (filenames[i], hists[i].tolist(), hists[i].tolist(), hists[i].tolist())
-                for i in range(len(filenames))
-            ]
-            _ = cur.executemany(
-                f"""
-                insert into {table_name} (filename, histogram_brute, histogram_ivf, histogram_hnsw)
-                values (%s, %s, %s, %s)
-                """,
-                rows,
-            )
+            with cur.copy(
+                t"copy {table_name} (filename, histogram_brute, histogram_ivf, histogram_hnsw) from stdin"
+            ) as copy:
+                for i in range(len(filenames)):
+                    vec_str = str(hists[i].tolist())
+                    copy.write_row((filenames[i], vec_str, vec_str, vec_str))
+
             conn.commit()
 
             lists = 100
