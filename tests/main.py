@@ -1,6 +1,7 @@
 import argparse
 from pathlib import Path
 from pprint import pprint
+from typing import cast
 
 from tests.lib import bench
 
@@ -16,7 +17,13 @@ def parse_args() -> tuple[Path, str, int, int | None, int]:
 
     args = parser.parse_args()
 
-    return Path(args.media_dir), args.media_type, args.n_iters, args.n_files, args.k
+    return (
+        Path(cast(Path, args.media_dir)),
+        cast(str, args.media_type),
+        cast(int, args.n_iters),
+        cast(int | None, args.n_files),
+        cast(int, args.k),
+    )
 
 
 def main():
