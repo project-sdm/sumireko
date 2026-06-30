@@ -18,7 +18,7 @@ def find_dict_entry(
     low = 0
     high = dict_size - 1
 
-    while low < high:
+    while low <= high:
         mid = (low + high) // 2
 
         dict_reader.set_index(mid)
@@ -44,7 +44,6 @@ async def text_search(req: Request, q: str, k: int = 10, language: str = "englis
 
     start = time.perf_counter()
     tokens = Counter(shared.text.tokenize_text(q, language=language))
-    print(tokens)
 
     n = len(data.files)
 
