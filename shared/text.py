@@ -3,6 +3,7 @@ import re
 import struct
 from collections import deque
 from dataclasses import dataclass
+from io import SEEK_CUR, SEEK_END, SEEK_SET, BufferedRandom, BufferedReader
 from pathlib import Path
 from typing import ClassVar
 
@@ -134,3 +135,104 @@ def _library_stopwords(language: str) -> set[str]:
 @functools.lru_cache
 def _build_stemmer(language: str) -> SnowballStemmer:
     return SnowballStemmer(language)
+
+
+# TODO: move from here onwards to somewhere else
+
+type DocId = int
+type Posting = tuple[DocId, int]
+type PostingsList = list[Posting]
+type Dictionary = dict[str, PostingsList]
+
+
+@dataclass
+class DictEntry:
+    PACK_FMT: ClassVar[str] = f"{MAX_TERM_LEN + 1}sii"
+    PACK_SIZE: ClassVar[int] = struct.calcsize(PACK_FMT)
+
+    term: str
+    offset: int
+    len: int
+
+    def pack(self) -> bytes:
+        return struct.pack(self.PACK_FMT, self.term.encode(), self.offset, self.len)
+
+    @classmethod
+    def unpack(cls, data: bytes):
+        term, offset, len = struct.unpack(cls.PACK_FMT, data)
+        return cls(term=term.decode().rstrip("\x00"), offset=offset, len=len)
+
+
+class DictReader:
+    file: BufferedReader
+    entry_buf: DictEntry | None = None
+
+    def __init__(self, file: BufferedReader):
+        self.file = file
+
+    def calc_size(self) -> int:
+        prev_pos = self.file.tell()
+        _ = self.file.seek(0, SEEK_END)
+        size = self.file.tell()
+        _ = self.file.seek(prev_pos, SEEK_SET)
+        return size // DictEntry.PACK_SIZE
+
+    def set_index(self, idx: int):
+        _ = self.file.seek(idx * DictEntry.PACK_SIZE)
+
+    def next(self) -> DictEntry | None:
+        data = self.file.read(DictEntry.PACK_SIZE)
+        if not data:
+            return None
+
+        return DictEntry.unpack(data)
+
+
+@dataclass
+class PostingsEntry:
+    PACK_FMT: ClassVar[str] = "if"
+    PACK_SIZE: ClassVar[int] = struct.calcsize(PACK_FMT)
+
+    doc_id: DocId
+    tf: float
+
+    def pack(self) -> bytes:
+        return struct.pack(self.PACK_FMT, self.doc_id, self.tf)
+
+    @classmethod
+    def unpack(cls, data: bytes):
+        doc_id, tf = struct.unpack(cls.PACK_FMT, data)  # pyright: ignore[reportAny]
+        return cls(doc_id=doc_id, tf=tf)  # pyright: ignore[reportAny]
+
+
+class PostingsReader:
+    file: BufferedRandom
+    postings_len: int
+    cur: int = 0
+
+    def __init__(self, file: BufferedRandom, postings_len: int, offset: int):
+        self.file = file
+        self.postings_len = postings_len
+
+        _ = self.file.seek(offset)
+
+    def next(self) -> PostingsEntry | None:
+        if self.cur >= self.postings_len:
+            return None
+
+        data = self.file.read(PostingsEntry.PACK_SIZE)
+        self.cur += 1
+
+        return PostingsEntry.unpack(data)
+
+    def write(self, entry: PostingsEntry):
+        assert self.cur < self.postings_len
+
+        _ = self.file.write(entry.pack())
+        self.cur += 1
+
+    def step_back(self):
+        assert self.cur > 0
+
+        _ = self.file.seek(-PostingsEntry.PACK_SIZE, SEEK_CUR)
+        self.cur -= 1

@@ -117,54 +117,6 @@ def make_block_path(base: Path, level: int, n: int) -> Path:
     return base / f"block_{level:02}_{n:02}"
 
 
-class DictReader:
-    file: BufferedReader
-    entry_buf: DictEntry | None = None
-
-    def __init__(self, file: BufferedReader):
-        self.file = file
-
-    def next(self) -> DictEntry | None:
-        data = self.file.read(DictEntry.PACK_SIZE)
-        if not data:
-            return None
-
-        return DictEntry.unpack(data)
-
-
-class PostingsReader:
-    file: BufferedRandom
-    postings_len: int
-    cur: int = 0
-
-    def __init__(self, file: BufferedRandom, postings_len: int, offset: int):
-        self.file = file
-        self.postings_len = postings_len
-
-        _ = self.file.seek(offset)
-
-    def next(self) -> PostingsEntry | None:
-        if self.cur >= self.postings_len:
-            return None
-
-        data = self.file.read(PostingsEntry.PACK_SIZE)
-        self.cur += 1
-
-        return PostingsEntry.unpack(data)
-
-    def write(self, entry: PostingsEntry):
-        assert self.cur < self.postings_len
-
-        _ = self.file.write(entry.pack())
-        self.cur += 1
-
-    def step_back(self):
-        assert self.cur > 0
-
-        _ = self.file.seek(-PostingsEntry.PACK_SIZE, SEEK_CUR)
-        self.cur -= 1
-
-
 def merge_blocks_pass(base: Path, level: int, n: int, blocks: tuple[int, ...]):
     print(f"Merging range {level}-{n} ({len(blocks)} blocks)...")
 
