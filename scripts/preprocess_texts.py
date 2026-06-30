@@ -3,7 +3,6 @@ import heapq
 import itertools
 import json
 import os
-import shutil
 from contextlib import ExitStack
 from io import BufferedWriter
 from pathlib import Path
@@ -13,6 +12,7 @@ from typing import cast
 import numpy as np
 
 import shared
+import spimi_cpp
 from shared.text import (
     DictEntry,
     DictReader,
@@ -238,7 +238,8 @@ def spimi_index_construction(
         print(f"Processing block {n}...")
 
         block_path = make_block_path(out_dir, 0, n)
-        spimi_invert(token_stream, block_path, max_memory)
+        spimi_cpp.spimi_invert(token_stream, str(block_path), max_memory)
+        # spimi_invert(token_stream, block_path, max_memory)
         n += 1
 
     final_level = merge_blocks(out_dir, 0, n, m=m)
@@ -282,6 +283,8 @@ def main():
     doc_paths = [texts_dir / filename for filename in doc_filenames]
 
     print(f"Found {len(doc_paths)} text files.")
+
+    os.makedirs(output_dir, exist_ok=True)
 
     with TemporaryDirectory(dir=output_dir) as tmp_dir:
         print("Constructing inverted index with SPIMI...")

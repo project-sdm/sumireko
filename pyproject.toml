@@ -15,5 +15,13 @@ dependencies = [
     "python-multipart",
 ]
 
+[build-system]
+requires = [
+    "setuptools",
+    "pybind11",
+]
+build-backend = "setuptools.build_meta"
+
+
 [tool.setuptools.packages.find]
 include = ["app*", "shared*"]

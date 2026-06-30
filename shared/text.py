@@ -60,6 +60,19 @@ class TokenStream:
 
         return Token(doc_id=self.next_doc - 1, term=term)
 
+    def next_batch(self, n: int) -> tuple[list[int], list[str]]:
+        doc_ids: list[int] = []
+        terms: list[str] = []
+
+        for _ in range(n):
+            token = self.next()
+            if token is None:
+                break
+            doc_ids.append(token.doc_id)
+            terms.append(token.term)
+
+        return doc_ids, terms
+
 
 def get_stopwords(language: str) -> set[str]:
     if language == "spanish":
@@ -114,7 +127,7 @@ def _build_stemmer(language: str) -> SnowballStemmer:
 
 @dataclass
 class DictEntry:
-    PACK_FMT: ClassVar[str] = f"{MAX_TERM_LEN + 1}sii"
+    PACK_FMT: ClassVar[str] = f"{MAX_TERM_LEN + 1}sNN"
     PACK_SIZE: ClassVar[int] = struct.calcsize(PACK_FMT)
 
     term: str
@@ -157,7 +170,7 @@ class DictReader:
 
 @dataclass
 class PostingsEntry:
-    PACK_FMT: ClassVar[str] = "if"
+    PACK_FMT: ClassVar[str] = "Nf"
     PACK_SIZE: ClassVar[int] = struct.calcsize(PACK_FMT)
 
     doc_id: DocId
