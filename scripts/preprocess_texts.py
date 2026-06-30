@@ -4,18 +4,15 @@ import itertools
 import json
 import os
 import shutil
-import struct
 from contextlib import ExitStack
-from dataclasses import dataclass
 from io import SEEK_CUR, BufferedRandom, BufferedReader, BufferedWriter
 from pathlib import Path
-from typing import ClassVar, cast
+from typing import cast
 
 import numpy as np
 
 import shared
-import shared.text
-from shared.text import TokenStream
+from shared.text import DictEntry, DocId, PostingsEntry, TokenStream
 
 
 def parse_args() -> argparse.Namespace:
@@ -34,7 +31,6 @@ def parse_args() -> argparse.Namespace:
     return parser.parse_args()
 
 
-type DocId = int
 type Posting = tuple[DocId, int]
 type PostingsList = list[Posting]
 type Dictionary = dict[str, PostingsList]
@@ -64,41 +60,6 @@ def add_to_postings_list(postings_list: PostingsList, doc_id: DocId):
 
 def sort_terms(dictionary: Dictionary) -> list[str]:
     return sorted(dictionary.keys())
-
-
-@dataclass
-class DictEntry:
-    PACK_FMT: ClassVar[str] = f"{shared.text.MAX_TERM_LEN + 1}sii"
-    PACK_SIZE: ClassVar[int] = struct.calcsize(PACK_FMT)
-
-    term: str
-    offset: int
-    len: int
-
-    def pack(self) -> bytes:
-        return struct.pack(self.PACK_FMT, self.term.encode(), self.offset, self.len)
-
-    @classmethod
-    def unpack(cls, data: bytes):
-        term, offset, len = tuple[bytes, int, int](struct.unpack(cls.PACK_FMT, data))
-        return cls(term=term.decode().rstrip("\x00"), offset=offset, len=len)
-
-
-@dataclass
-class PostingsEntry:
-    PACK_FMT: ClassVar[str] = "if"
-    PACK_SIZE: ClassVar[int] = struct.calcsize(PACK_FMT)
-
-    doc_id: DocId
-    tf: float
-
-    def pack(self) -> bytes:
-        return struct.pack(self.PACK_FMT, self.doc_id, self.tf)
-
-    @classmethod
-    def unpack(cls, data: bytes):
-        doc_id, tf = tuple[DocId, float](struct.unpack(cls.PACK_FMT, data))
-        return cls(doc_id=doc_id, tf=tf)
 
 
 class PostingsWriter:

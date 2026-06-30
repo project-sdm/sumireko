@@ -1,14 +1,53 @@
 import functools
 import re
+import struct
 from collections import deque
 from dataclasses import dataclass
 from pathlib import Path
+from typing import ClassVar
 
 from nltk.corpus import stopwords as nltk_stopwords
 from nltk.stem import SnowballStemmer
 
 MAX_TERM_LEN = 23
 TOKEN_RE = re.compile(r"[a-zA-ZÀ-ÿ0-9]+")
+
+type DocId = int
+
+
+@dataclass
+class DictEntry:
+    PACK_FMT: ClassVar[str] = f"{MAX_TERM_LEN + 1}sii"
+    PACK_SIZE: ClassVar[int] = struct.calcsize(PACK_FMT)
+
+    term: str
+    offset: int
+    len: int
+
+    def pack(self) -> bytes:
+        return struct.pack(self.PACK_FMT, self.term.encode(), self.offset, self.len)
+
+    @classmethod
+    def unpack(cls, data: bytes):
+        term, offset, len = tuple[bytes, int, int](struct.unpack(cls.PACK_FMT, data))
+        return cls(term=term.decode().rstrip("\x00"), offset=offset, len=len)
+
+
+@dataclass
+class PostingsEntry:
+    PACK_FMT: ClassVar[str] = "if"
+    PACK_SIZE: ClassVar[int] = struct.calcsize(PACK_FMT)
+
+    doc_id: DocId
+    tf: float
+
+    def pack(self) -> bytes:
+        return struct.pack(self.PACK_FMT, self.doc_id, self.tf)
+
+    @classmethod
+    def unpack(cls, data: bytes):
+        doc_id, tf = tuple[DocId, float](struct.unpack(cls.PACK_FMT, data))
+        return cls(doc_id=doc_id, tf=tf)
 
 
 @dataclass
