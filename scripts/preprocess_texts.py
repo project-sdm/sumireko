@@ -234,7 +234,7 @@ def spimi_index_construction(
     token_stream = parse_docs(doc_paths, language)
 
     while not token_stream.done():
-        print(f"Processing block {n}")
+        print(f"Processing block {n}...")
 
         block_path = make_block_path(out_dir, 0, n)
         spimi_invert(token_stream, block_path, max_memory)
