@@ -80,7 +80,7 @@ class DictEntry:
 
     @classmethod
     def unpack(cls, data: bytes):
-        term, offset, len = struct.unpack(cls.PACK_FMT, data)
+        term, offset, len = tuple[bytes, int, int](struct.unpack(cls.PACK_FMT, data))
         return cls(term=term.decode().rstrip("\x00"), offset=offset, len=len)
 
 
@@ -97,8 +97,8 @@ class PostingsEntry:
 
     @classmethod
     def unpack(cls, data: bytes):
-        doc_id, tf = struct.unpack(cls.PACK_FMT, data)  # pyright: ignore[reportAny]
-        return cls(doc_id=doc_id, tf=tf)  # pyright: ignore[reportAny]
+        doc_id, tf = tuple[DocId, float](struct.unpack(cls.PACK_FMT, data))
+        return cls(doc_id=doc_id, tf=tf)
 
 
 class PostingsWriter:
