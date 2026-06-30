@@ -58,7 +58,7 @@ def knn(descriptors: np.ndarray, data: PreprocessedData, k: int | None) -> KnnRe
 
     top_files = [data.media_files[i] for i, _ in result[:k]]
 
-    return KnnResult(top_files, elapsed_ms)
+    return KnnResult(top_files, round(elapsed_ms, 2))
 
 
 def knn_postgres(
