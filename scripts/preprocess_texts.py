@@ -244,6 +244,30 @@ def spimi_index_construction(
     return make_block_path(out_dir, final_level, 0)
 
 
+def weight_postings(dict_path: Path, postings_path: Path, n_docs: int):
+    with (
+        open(dict_path, "rb") as dict_file,
+        open(postings_path, "r+b") as postings_file,
+    ):
+        dict_reader = DictReader(dict_file)
+
+        lengths_sq = np.zeros(n_docs, dtype=np.float32)
+
+        while dict_entry := dict_reader.next():
+            postings = PostingsReader(postings_file, dict_entry.len, dict_entry.offset)
+
+            df = dict_entry.len
+
+            while posting := postings.next():
+                w = shared.weight(n_docs, posting.value, df)
+                lengths_sq[posting.doc_id] += w**2
+
+                postings.step_back()
+                postings.write(PostingsEntry(doc_id=posting.doc_id, value=w))
+
+    return np.sqrt(lengths_sq)
+
+
 def main():
     args = parse_args()
 
@@ -278,28 +302,7 @@ def main():
     shutil.rmtree(tmp_dir, ignore_errors=True)
 
     print("Weighing index with TF-IDF and calculating document lengths...")
-    with (
-        open(dict_path, "rb") as dict_file,
-        open(postings_path, "r+b") as postings_file,
-    ):
-        dict_reader = DictReader(dict_file)
-        n = len(doc_paths)
-
-        lengths = np.zeros(n)
-
-        while dict_entry := dict_reader.next():
-            postings = PostingsReader(postings_file, dict_entry.len, dict_entry.offset)
-
-            df = dict_entry.len
-
-            while posting := postings.next():
-                w = shared.weight(n, posting.value, df)
-                lengths[posting.doc_id] += w**2
-
-                postings.step_back()
-                postings.write(PostingsEntry(doc_id=posting.doc_id, value=w))
-
-        lengths = np.sqrt(lengths)
+    lengths = weight_postings(dict_path, postings_path, len(doc_paths))
 
     with open(output_dir / "files.json", "w") as f:
         json.dump(doc_filenames, f)
