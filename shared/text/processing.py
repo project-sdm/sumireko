@@ -46,8 +46,10 @@ class TokenStream:
             self.cur_terms = deque(tokenize_text(text, language=self.language))
             term = self.cur_terms.popleft() if self.cur_terms else None
 
-        if len(term) > MAX_TERM_LEN:
-            term_trunc = term[:MAX_TERM_LEN]
+        term_bytes = term.encode("utf-8")
+
+        if len(term_bytes) > MAX_TERM_LEN:
+            term_trunc = term_bytes[:MAX_TERM_LEN].decode("utf-8", errors="ignore")
             print(f"[WARNING] Truncating {term} to {term_trunc}")
             term = term_trunc
 

@@ -10,6 +10,7 @@ ext_modules = [
         [
             "spimi_cpp/main.cpp",
         ],
+        cxx_std=20,
     ),
 ]
 

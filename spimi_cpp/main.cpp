@@ -6,6 +6,8 @@
 #include <cstring>
 #include <filesystem>
 #include <fstream>
+#include <functional>
+#include <iostream>
 #include <optional>
 #include <string>
 #include <unordered_map>
@@ -14,20 +16,34 @@
 
 namespace py = pybind11;
 
-using DocId = std::size_t;
+template<typename T>
+struct TrackingAllocator {
+    std::size_t& bytes;
+
+    using value_type = T;
+
+    explicit TrackingAllocator(std::size_t& bytes)
+        : bytes{bytes} {}
+
+    template<typename U>
+    TrackingAllocator(const TrackingAllocator<U>& other)
+        : bytes{other.bytes} {}
+
+    value_type* allocate(std::size_t n) {
+        bytes += n * sizeof(value_type);
+        return static_cast<value_type*>(::operator new(n * sizeof(value_type)));
+    }
+
+    void deallocate(value_type* ptr, std::size_t n) {
+        bytes -= n * sizeof(value_type);
+        ::operator delete(ptr);
+    }
+};
 
 static constexpr std::size_t MAX_TERM_LEN = 23;
 static constexpr std::size_t BATCH_SIZE = 4096;
 
-#pragma pack(push, 1)
-struct Posting {
-    DocId doc_id;
-    std::size_t tf;
-};
-#pragma pack(pop)
-
-using PostingsList = std::vector<Posting>;
-using Dictionary = std::unordered_map<std::string, PostingsList>;
+using DocId = std::size_t;
 
 struct Token {
     DocId doc_id;
@@ -73,13 +89,32 @@ public:
     }
 };
 
-void add_to_dictionary(Dictionary& dictionary, std::string term) {
-    dictionary.emplace(std::move(term), PostingsList{});
-}
+struct Posting {
+    DocId doc_id;
+    std::size_t tf;
+};
 
-PostingsList& get_postings_list(Dictionary& dictionary, const std::string& term) {
-    return dictionary.at(term);
-}
+struct StringHash {
+    using is_transparent = void;
+
+    std::size_t operator()(std::string_view sv) const {
+        return std::hash<std::string_view>{}(sv);
+    }
+};
+
+struct StringEqual {
+    using is_transparent = void;
+
+    bool operator()(std::string_view a, std::string_view b) const {
+        return a == b;
+    }
+};
+
+using Term = std::basic_string<char, std::char_traits<char>, TrackingAllocator<char>>;
+using PostingsList = std::vector<Posting, TrackingAllocator<Posting>>;
+using DictEntry = std::pair<const Term, PostingsList>;
+using Dictionary =
+    std::unordered_map<Term, PostingsList, StringHash, StringEqual, TrackingAllocator<DictEntry>>;
 
 void add_to_postings_list(PostingsList& postings_list, DocId doc_id) {
     if (!postings_list.empty() && postings_list.back().doc_id == doc_id)
@@ -112,7 +147,10 @@ void write_block_to_disk(const std::vector<std::string>& sorted_terms,
     std::ofstream postings_file(postings_path, std::ios::binary);
 
     for (const auto& term : sorted_terms) {
-        const auto& postings_list = dictionary.at(term);
+        auto it = dictionary.find(std::string_view{term});
+        assert(it != dictionary.end());
+
+        const auto& postings_list = it->second;
         std::size_t offset = postings_file.tellp();
 
         for (const auto& posting : postings_list) {
@@ -121,8 +159,6 @@ void write_block_to_disk(const std::vector<std::string>& sorted_terms,
                                 sizeof(posting.doc_id));
             postings_file.write(reinterpret_cast<const char*>(&tf_f), sizeof(tf_f));
         }
-
-        assert(term.size() <= MAX_TERM_LEN);
 
         char term_ch[MAX_TERM_LEN + 1] = {};
         std::memcpy(term_ch, term.c_str(), term.size() + 1);
@@ -141,17 +177,20 @@ void spimi_invert(py::object token_stream_obj, std::string block_path, std::size
     TokenStream token_stream{std::move(token_stream_obj)};
     std::optional<Token> token;
 
-    Dictionary dictionary;
     std::size_t bytes_used = 0;
 
+    // these allocators track how many bytes dictionary uses
+    TrackingAllocator<char> char_alloc{bytes_used};
+    TrackingAllocator<Posting> posting_alloc{bytes_used};
+    TrackingAllocator<DictEntry> dict_alloc{bytes_used};
+
+    Dictionary dictionary{dict_alloc};
+
     while (bytes_used < max_memory && (token = token_stream.next())) {
-        auto [it, inserted] = dictionary.emplace(token->term, PostingsList{});
+        Term term{token->term, char_alloc};
 
-        if (inserted)
-            bytes_used += 16 + token->term.size();
-
+        auto [it, _] = dictionary.try_emplace(std::move(term), PostingsList{posting_alloc});
         add_to_postings_list(it->second, token->doc_id);
-        bytes_used += 56;
     }
 
     auto sorted_terms = sort_terms(dictionary);
