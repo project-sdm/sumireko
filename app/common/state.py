@@ -1,5 +1,4 @@
 import json
-import struct
 from dataclasses import dataclass
 from enum import Enum
 from pathlib import Path
@@ -15,13 +14,13 @@ from psycopg_pool import ConnectionPool
 from starlette.datastructures import State
 
 from app.common.logger import APP_LOGGER
-from shared.text import DictEntry, DocId, PostingsEntry
 
 
 @dataclass
 class PreprocessedTextData:
     files: list[str]
-    index: dict[str, list[tuple[int, float]]]
+    dict_path: Path
+    postings_path: Path
     lengths: npt.NDArray[np.float32]
 
 
@@ -64,38 +63,19 @@ def load_text_preprocessed(kind: DataType, data_dir: Path) -> PreprocessedTextDa
     label = kind.value
     APP_LOGGER.info(f"[{label}] Loading preprocessed data...")
 
-    lengths = cast(np.ndarray, np.load(data_dir / "lengths.npy"))
-
     with open(data_dir / "files.json") as f:
         files = cast(list[str], json.load(f))
 
-    index = dict[str, list[tuple[int, float]]]()
+    lengths = cast(np.ndarray, np.load(data_dir / "lengths.npy"))
 
-    with (
-        open(data_dir / "index.dict", "rb") as dict_file,
-        open(data_dir / "index.postings", "rb") as postings_file,
-    ):
-        while raw := dict_file.read(DictEntry.PACK_SIZE):
-            term_bytes, offset, length = tuple[bytes, int, int](
-                struct.unpack(DictEntry.PACK_FMT, raw)
-            )
-            term = term_bytes.decode().rstrip("\x00")
+    APP_LOGGER.info(f"[{label}] Loaded {len(files)} documents.")
 
-            _ = postings_file.seek(offset)
-
-            postings: list[tuple[int, float]] = []
-            for _ in range(length):
-                post_raw = postings_file.read(PostingsEntry.PACK_SIZE)
-                doc_id, tf_weight = tuple[DocId, float](
-                    struct.unpack(PostingsEntry.PACK_FMT, post_raw)
-                )
-                postings.append((doc_id, tf_weight))
-
-            index[term] = postings
-
-    APP_LOGGER.info(f"[{label}] Loaded {len(files)} documents, {len(index)} terms.")
-
-    return PreprocessedTextData(files=files, index=index, lengths=lengths)
+    return PreprocessedTextData(
+        files=files,
+        dict_path=data_dir / "index.dict",
+        postings_path=data_dir / "index.postings",
+        lengths=lengths,
+    )
 
 
 def load_media_preprocessed(kind: DataType, data_dir: Path) -> PreprocessedMediaData:
@@ -106,9 +86,7 @@ def load_media_preprocessed(kind: DataType, data_dir: Path) -> PreprocessedMedia
     df = cast(np.ndarray, np.load(data_dir / "df.npy"))
     lengths = cast(np.ndarray, np.load(data_dir / "lengths.npy"))
 
-    word_index: IndexFlatL2 = cast(
-        IndexFlatL2, faiss.read_index(str(data_dir / "word_index.faiss"))
-    )
+    word_index = cast(IndexFlatL2, faiss.read_index(str(data_dir / "word_index.faiss")))
 
     with open(data_dir / "media_files.json") as f:
         media_files = cast(list[str], json.load(f))

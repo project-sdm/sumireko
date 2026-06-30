@@ -12,30 +12,11 @@ from app.images.router import image_router
 from app.text.router import text_router
 
 
-def load_text_data(data_dir: Path) -> TextData:
-    APP_LOGGER.info(f"[TEXT] Loading preprocessed data...")
-
-    with open(data_dir / "files.json") as f:
-        files: list[str] = json.load(f)
-
-    lengths = np.load(data_dir / "lengths.npy")
-
-    APP_LOGGER.info(f"[TEXT] Loaded {len(files)} files.")
-
-    return TextData(
-        files=files,
-        dict_path=data_dir / "index.dict",
-        postings_path=data_dir / "index.postings",
-        lengths=lengths,
-    )
-
-
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     TEXTS_PATH = Path(".data/texts")
     IMAGES_PATH = Path(".data/images")
     AUDIOS_PATH = Path(".data/audios")
-    TEXT_PATH = Path(".data/texts")
 
     postgres.init(IMAGES_PATH, "images")
     postgres.init(AUDIOS_PATH, "audios")

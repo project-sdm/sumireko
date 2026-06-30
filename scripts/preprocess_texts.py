@@ -5,14 +5,21 @@ import json
 import os
 import shutil
 from contextlib import ExitStack
-from io import SEEK_CUR, BufferedRandom, BufferedReader, BufferedWriter
+from io import BufferedWriter
 from pathlib import Path
 from typing import cast
 
 import numpy as np
 
 import shared
-from shared.text import DictEntry, DocId, PostingsEntry, TokenStream
+from shared.text import (
+    DictEntry,
+    DictReader,
+    DocId,
+    PostingsEntry,
+    PostingsReader,
+    TokenStream,
+)
 
 
 def parse_args() -> argparse.Namespace:
