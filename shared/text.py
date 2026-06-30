@@ -1,37 +1,52 @@
 import functools
 import re
-import string
-from collections import Counter
-from collections.abc import Iterator
+from collections import deque
 from dataclasses import dataclass
 from pathlib import Path
 
 from nltk.corpus import stopwords as nltk_stopwords
 from nltk.stem import SnowballStemmer
 
+MAX_TERM_LEN = 23
 TOKEN_RE = re.compile(r"[a-zA-ZÀ-ÿ0-9]+")
 
 
-@dataclass(frozen=True)
-class TextDocument:
-    source: str
-    text: str
-
-    @property
-    def identifier(self) -> str:
-        return self.source
+@dataclass
+class Token:
+    doc_id: int
+    term: str
 
 
-def read_text_file(path: Path) -> str:
-    try:
-        return path.read_text(encoding="utf-8")
-    except UnicodeDecodeError:
-        return path.read_text(encoding="latin-1")
+class TokenStream:
+    doc_paths: list[Path]
+    language: str
+    stopwords: set[str]
+    next_doc: int = 0
+    cur_terms: deque[str] = deque()
 
+    def __init__(self, doc_paths: list[Path], language: str):
+        self.doc_paths = doc_paths
+        self.language = language
+        self.stopwords = _library_stopwords(language)
 
-def yield_text_documents(paths: list[Path]) -> Iterator[TextDocument]:
-    for path in paths:
-        yield TextDocument(path.name, read_text_file(path))
+    def done(self) -> bool:
+        return not self.cur_terms and self.next_doc >= len(self.doc_paths)
+
+    def next(self) -> Token | None:
+        term = self.cur_terms.popleft() if self.cur_terms else None
+
+        while term is None:
+            if self.next_doc >= len(self.doc_paths):
+                return None
+
+            text = self.doc_paths[self.next_doc].read_text()
+            self.next_doc += 1
+
+            self.cur_terms = deque(tokenize_text(text, language=self.language))
+            term = self.cur_terms.popleft() if self.cur_terms else None
+
+        assert len(term) <= MAX_TERM_LEN
+        return Token(doc_id=self.next_doc - 1, term=term)
 
 
 def get_stopwords(language: str) -> set[str]:
@@ -47,72 +62,36 @@ def get_stopwords(language: str) -> set[str]:
     raise ValueError(f"unsupported language: {language}")
 
 
-def normalize_tokens(
+def tokenize_text(
     text: str,
     language: str = "spanish",
-    min_token_len: int = 2,
-    use_stemming: bool = True,
 ) -> list[str]:
     stopwords = get_stopwords(language)
-    stemmer = _build_stemmer(language) if use_stemming else None
+    stemmer = _build_stemmer(language)
 
     tokens: list[str] = []
+
     for match in TOKEN_RE.finditer(text.lower()):
         token = match.group(0)
 
-        if len(token) < min_token_len:
-            continue
-
-        if token in stopwords:
-            continue
-
-        if stemmer is not None:
+        if token not in stopwords:
             token = stemmer.stem(token)
-
-        tokens.append(token)
+            tokens.append(token)
 
     return tokens
-
-
-def collection_term_counts(
-    chunks: list[TextChunk],
-    language: str = "spanish",
-    min_token_len: int = 2,
-    use_stemming: bool = True,
-) -> Counter[str]:
-    counts: Counter[str] = Counter()
-
-    for chunk in chunks:
-        counts.update(
-            normalize_tokens(
-                chunk.text,
-                language=language,
-                min_token_len=min_token_len,
-                use_stemming=use_stemming,
-            )
-        )
-
-    return counts
 
 
 @functools.lru_cache
 def _library_stopwords(language: str) -> set[str]:
     try:
         return set(nltk_stopwords.words(language))
-    except LookupError as exc:
+    except LookupError as ex:
         raise LookupError(
             "NLTK stopwords corpus is required. Install it with: "
-            "python -m nltk.downloader stopwords"
-        ) from exc
-
-
-def _stemmer_language(language: str) -> str:
-    if language == "english":
-        return "english"
-
-    return "spanish"
+            + "python -m nltk.downloader stopwords"
+        ) from ex
 
 
 @functools.lru_cache
 def _build_stemmer(language: str) -> SnowballStemmer:
-    return SnowballStemmer(_stemmer_language(language))
+    return SnowballStemmer(language)

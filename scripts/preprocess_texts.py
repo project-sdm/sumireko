@@ -1,376 +1,391 @@
 import argparse
+import heapq
+import itertools
 import json
-import math
 import os
 import shutil
-import sys
-from collections import Counter
-from collections.abc import Iterable
+import struct
+from contextlib import ExitStack
 from dataclasses import dataclass
+from io import SEEK_CUR, BufferedRandom, BufferedReader, BufferedWriter
 from pathlib import Path
-
-sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
+from typing import ClassVar, cast
 
 import numpy as np
 
 import shared
 import shared.text
-from scripts.binary_index import (
-    LexiconEntry,
-    read_lexicon,
-    read_raw_postings,
-    write_lexicon,
-    write_raw_postings,
-    write_weighted_postings,
-)
-from scripts.shared import ProgressMeter
+from shared.text import TokenStream
 
-OUTPUT_DIR = Path(".data/texts")
-
-
-@dataclass(frozen=True)
-class BlockFiles:
-    postings_path: Path
-    lexicon_path: Path
-
-
-@dataclass
-class JsonArrayWriter:
-    path: Path
-    first: bool = True
-
-    def __post_init__(self):
-        self.file = open(self.path, "w")
-        self.file.write("[")
-
-    def write(self, item):
-        if not self.first:
-            self.file.write(",")
-
-        json.dump(item, self.file)
-        self.first = False
-
-    def close(self):
-        self.file.write("]")
-        self.file.close()
 
 def parse_args() -> argparse.Namespace:
-    parser = argparse.ArgumentParser(description="Preprocess text files into a TF-IDF index.")
-    parser.add_argument("texts_dir", type=Path, help="Folder containing .txt files")
-    parser.add_argument("--output-dir", type=Path, default=OUTPUT_DIR)
-    parser.add_argument(
-        "--language",
-        choices=["spanish", "english", "multilingual"],
-        default="spanish",
+    parser = argparse.ArgumentParser(
+        description="Preprocess text files into a TF-IDF index.",
     )
-    parser.add_argument("--min-token-len", type=int, default=2)
-    parser.add_argument("--no-stemming", action="store_true")
-    parser.add_argument("--block-size", type=int, default=5000)
-    parser.add_argument("--tmp-dir", type=Path)
-    parser.add_argument("--keep-tmp", action="store_true")
+    _ = parser.add_argument("texts_dir", type=Path, help="Folder containing .txt files")
+    _ = parser.add_argument("--output-dir", type=Path, default=Path(".data/texts"))
+    _ = parser.add_argument(
+        "--language",
+        choices=["english", "spanish", "multilingual"],
+        default="english",
+    )
+    _ = parser.add_argument("--merge-m", type=int, default=10)
+    _ = parser.add_argument("--max-memory", type=int, default=2**12)
     return parser.parse_args()
 
 
-def build_vocabulary(
-    documents: Iterable[shared.text.TextDocument],
-    language: str,
-    min_token_len: int,
-    use_stemming: bool,
-) -> tuple[list[str], int]:
-    term_to_id: dict[str, int] = {}
-    document_count = 0
-
-    for document in documents:
-        document_count += 1
-
-        for term in shared.text.normalize_tokens(
-            document.text,
-            language=language,
-            min_token_len=min_token_len,
-            use_stemming=use_stemming,
-        ):
-            if term not in term_to_id:
-                term_to_id[term] = len(term_to_id)
-
-    return list(term_to_id.keys()), document_count
+type DocId = int
+type Posting = tuple[DocId, int]
+type PostingsList = list[Posting]
+type Dictionary = dict[str, PostingsList]
 
 
-def build_vocabulary_from_files(
-    filenames: list[Path],
-    language: str,
-    min_token_len: int,
-    use_stemming: bool,
-) -> tuple[list[str], int]:
-    return build_vocabulary(
-        shared.text.yield_text_documents(filenames),
-        language,
-        min_token_len,
-        use_stemming,
-    )
+def parse_docs(paths: list[Path], language: str) -> TokenStream:
+    return TokenStream(paths, language)
 
 
-def flush_raw_block(
-    block: list[list[tuple[int, int]]],
-    tmp_dir: Path,
-    block_id: int,
-) -> BlockFiles:
-    os.makedirs(tmp_dir, exist_ok=True)
-
-    postings_path = tmp_dir / f"block_{block_id:06d}.postings.bin"
-    lexicon_path = tmp_dir / f"block_{block_id:06d}.lexicon.bin"
-    entries: list[LexiconEntry] = []
-
-    with open(postings_path, "wb") as postings_file:
-        for word_id, postings in enumerate(block):
-            if not postings:
-                continue
-
-            offset, posting_count = write_raw_postings(postings_file, postings)
-            entries.append(LexiconEntry(word_id, offset, posting_count))
-
-    with open(lexicon_path, "wb") as lexicon_file:
-        write_lexicon(lexicon_file, entries)
-
-    return BlockFiles(postings_path, lexicon_path)
+def add_to_dictionary(dictionary: Dictionary, term: str) -> PostingsList:
+    dictionary[term] = []
+    return dictionary[term]
 
 
-def build_spimi_block_files(
-    documents: Iterable[shared.text.TextDocument],
-    document_count: int,
-    term_to_id: dict[str, int],
-    language: str,
-    min_token_len: int,
-    use_stemming: bool,
-    block_size: int,
-    tmp_dir: Path,
-    documents_writer: JsonArrayWriter,
-) -> list[BlockFiles]:
-    block_files: list[BlockFiles] = []
-    current = _empty_block(len(term_to_id))
-    meter = ProgressMeter(0.0001)
-    block_id = 0
-
-    for document_id, document in enumerate(documents):
-        meter.record(document_id / document_count)
-        documents_writer.write(
-            {
-                "id": document.identifier,
-                "source": document.source,
-                "text": document.text,
-            }
-        )
-        tokens = shared.text.normalize_tokens(
-            document.text,
-            language=language,
-            min_token_len=min_token_len,
-            use_stemming=use_stemming,
-        )
-        frequencies = Counter(
-            term_to_id[token] for token in tokens if token in term_to_id
-        )
-
-        for word_id, tf in frequencies.items():
-            current[word_id].append((document_id, tf))
-
-        if (document_id + 1) % block_size == 0:
-            block_files.append(flush_raw_block(current, tmp_dir, block_id))
-            current = _empty_block(len(term_to_id))
-            block_id += 1
-
-    meter.record(1)
-
-    if any(postings for postings in current):
-        block_files.append(flush_raw_block(current, tmp_dir, block_id))
-
-    return block_files
+def get_posting_list(dictionary: Dictionary, term: str) -> PostingsList:
+    return dictionary[term]
 
 
-def merge_block_files(
-    block_files: list[BlockFiles],
-    bow_len: int,
-) -> BlockFiles:
-    raw_postings_path = block_files[0].postings_path.parent / "raw.postings.bin"
-    raw_lexicon_path = block_files[0].lexicon_path.parent / "raw.lexicon.bin"
-    block_lexicons = []
+def add_to_postings_list(postings_list: PostingsList, doc_id: DocId):
+    last = len(postings_list) - 1
 
-    for block in block_files:
-        with open(block.lexicon_path, "rb") as lexicon_file:
-            block_lexicons.append(read_lexicon(lexicon_file))
-
-    entries: list[LexiconEntry] = []
-
-    with open(raw_postings_path, "wb") as raw_postings_file:
-        for word_id in range(bow_len):
-            merged: list[tuple[int, int]] = []
-
-            for block, lexicon in zip(block_files, block_lexicons):
-                entry = lexicon.get(word_id)
-                if entry is None:
-                    continue
-
-                with open(block.postings_path, "rb") as postings_file:
-                    merged.extend(
-                        read_raw_postings(
-                            postings_file,
-                            entry.offset,
-                            entry.posting_count,
-                        )
-                    )
-
-            if not merged:
-                continue
-
-            merged.sort(key=lambda posting: posting[0])
-            offset, posting_count = write_raw_postings(raw_postings_file, merged)
-            entries.append(LexiconEntry(word_id, offset, posting_count))
-
-    with open(raw_lexicon_path, "wb") as raw_lexicon_file:
-        write_lexicon(raw_lexicon_file, entries)
-
-    return BlockFiles(raw_postings_path, raw_lexicon_path)
+    if len(postings_list) > 0 and postings_list[last][0] == doc_id:
+        postings_list[last] = (doc_id, postings_list[last][1] + 1)
+    else:
+        postings_list.append((doc_id, 1))
 
 
-def compute_weighted_index_files(
-    raw_files: BlockFiles,
-    output_dir: Path,
-    term_count: int,
-    document_count: int,
-) -> tuple[np.ndarray, np.ndarray]:
-    df = np.zeros(term_count, dtype=np.uint32)
-    lengths = np.zeros(document_count, dtype=np.float32)
-
-    postings_path = output_dir / "postings.bin"
-    lexicon_path = output_dir / "lexicon.bin"
-    entries: list[LexiconEntry] = []
-
-    with open(raw_files.lexicon_path, "rb") as raw_lexicon_file:
-        raw_lexicon = read_lexicon(raw_lexicon_file)
-
-    with open(raw_files.postings_path, "rb") as raw_postings_file:
-        with open(postings_path, "wb") as weighted_postings_file:
-            for word_id in range(term_count):
-                entry = raw_lexicon.get(word_id)
-                if entry is None:
-                    continue
-
-                raw_postings = read_raw_postings(
-                    raw_postings_file,
-                    entry.offset,
-                    entry.posting_count,
-                )
-                df[word_id] = len(raw_postings)
-                weighted_postings: list[tuple[int, float]] = []
-
-                for document_id, tf in raw_postings:
-                    weight = shared.weight(document_count, tf, int(df[word_id]))
-                    lengths[document_id] += weight**2
-                    weighted_postings.append((document_id, weight))
-
-                offset, posting_count = write_weighted_postings(
-                    weighted_postings_file,
-                    weighted_postings,
-                )
-                entries.append(LexiconEntry(word_id, offset, posting_count))
-
-    with open(lexicon_path, "wb") as lexicon_file:
-        write_lexicon(lexicon_file, entries)
-
-    for document_id in range(document_count):
-        lengths[document_id] = math.sqrt(lengths[document_id])
-
-    return df, lengths
+def sort_terms(dictionary: Dictionary) -> list[str]:
+    return sorted(dictionary.keys())
 
 
-def save_outputs(
-    output_dir: Path,
-    terms: list[str],
-    df: np.ndarray,
-    lengths: np.ndarray,
+@dataclass
+class DictEntry:
+    PACK_FMT: ClassVar[str] = f"{shared.text.MAX_TERM_LEN + 1}sii"
+    PACK_SIZE: ClassVar[int] = struct.calcsize(PACK_FMT)
+
+    term: str
+    offset: int
+    len: int
+
+    def pack(self) -> bytes:
+        return struct.pack(self.PACK_FMT, self.term.encode(), self.offset, self.len)
+
+    @classmethod
+    def unpack(cls, data: bytes):
+        term, offset, len = struct.unpack(cls.PACK_FMT, data)
+        return cls(term=term.decode().rstrip("\x00"), offset=offset, len=len)
+
+
+@dataclass
+class PostingsEntry:
+    PACK_FMT: ClassVar[str] = "if"
+    PACK_SIZE: ClassVar[int] = struct.calcsize(PACK_FMT)
+
+    doc_id: DocId
+    tf: float
+
+    def pack(self) -> bytes:
+        return struct.pack(self.PACK_FMT, self.doc_id, self.tf)
+
+    @classmethod
+    def unpack(cls, data: bytes):
+        doc_id, tf = struct.unpack(cls.PACK_FMT, data)  # pyright: ignore[reportAny]
+        return cls(doc_id=doc_id, tf=tf)  # pyright: ignore[reportAny]
+
+
+class PostingsWriter:
+    file: BufferedWriter
+
+    def __init__(self, file: BufferedWriter):
+        self.file = file
+
+    def write_posting(self, doc_id: int, tf: int):
+        entry = PostingsEntry(doc_id=doc_id, tf=tf)
+        _ = self.file.write(entry.pack())
+
+
+def write_block_to_disk(
+    sorted_terms: list[str],
+    dictionary: Dictionary,
+    block_path: Path,
 ):
-    os.makedirs(output_dir, exist_ok=True)
+    postings_path = block_path.with_suffix(".postings")
+    dict_path = block_path.with_suffix(".dict")
 
-    np.save(output_dir / "terms.npy", np.array(terms, dtype=str))
-    np.save(output_dir / "df.npy", df)
-    np.save(output_dir / "lengths.npy", lengths)
+    with open(postings_path, "wb") as postings_file, open(dict_path, "wb") as dict_file:
+        for term in sorted_terms:
+            postings_list = get_posting_list(dictionary, term)
 
-    with open(output_dir / "term_to_id.json", "w") as f:
-        json.dump({term: i for i, term in enumerate(terms)}, f)
+            offset = postings_file.tell()
+
+            for doc_id, tf in postings_list:
+                posting = PostingsEntry(doc_id=doc_id, tf=tf)
+                _ = postings_file.write(posting.pack())
+
+            dict_entry = DictEntry(term=term, offset=offset, len=len(postings_list))
+            _ = dict_file.write(dict_entry.pack())
 
 
-def _empty_block(bow_len: int) -> list[list[tuple[int, int]]]:
-    return [[] for _ in range(bow_len)]
+def spimi_invert(token_stream: TokenStream, block_path: Path, max_memory: int):
+    dictionary: Dictionary = {}
+    bytes_used = 0
+
+    while bytes_used < max_memory and (token := token_stream.next()):
+
+        if not token.term in dictionary:
+            postings_list = add_to_dictionary(dictionary, token.term)
+            bytes_used += 16 + len(token.term)
+        else:
+            postings_list = get_posting_list(dictionary, token.term)
+
+        add_to_postings_list(postings_list, token.doc_id)
+        bytes_used += 56
+
+    sorted_terms = sort_terms(dictionary)
+    write_block_to_disk(sorted_terms, dictionary, block_path)
+
+
+def make_block_path(base: Path, level: int, n: int) -> Path:
+    return base / f"block_{level:02}_{n:02}"
+
+
+class DictReader:
+    file: BufferedReader
+    entry_buf: DictEntry | None = None
+
+    def __init__(self, file: BufferedReader):
+        self.file = file
+
+    def next(self) -> DictEntry | None:
+        data = self.file.read(DictEntry.PACK_SIZE)
+        if not data:
+            return None
+
+        return DictEntry.unpack(data)
+
+
+class PostingsReader:
+    file: BufferedRandom
+    postings_len: int
+    cur: int = 0
+
+    def __init__(self, file: BufferedRandom, postings_len: int, offset: int):
+        self.file = file
+        self.postings_len = postings_len
+
+        _ = self.file.seek(offset)
+
+    def next(self) -> PostingsEntry | None:
+        if self.cur >= self.postings_len:
+            return None
+
+        data = self.file.read(PostingsEntry.PACK_SIZE)
+        self.cur += 1
+
+        return PostingsEntry.unpack(data)
+
+    def write(self, entry: PostingsEntry):
+        assert self.cur < self.postings_len
+
+        _ = self.file.write(entry.pack())
+        self.cur += 1
+
+    def step_back(self):
+        assert self.cur > 0
+
+        _ = self.file.seek(-PostingsEntry.PACK_SIZE, SEEK_CUR)
+        self.cur -= 1
+
+
+def merge_blocks_pass(base: Path, level: int, n: int, blocks: tuple[int, ...]):
+    print(f"Merging range {level}-{n} ({len(blocks)} blocks)...")
+
+    paths = [make_block_path(base, level, b) for b in blocks]
+    out_path = make_block_path(base, level + 1, n)
+
+    with (
+        ExitStack() as stack,
+        open(out_path.with_suffix(".dict"), "wb") as out_dict,
+        open(out_path.with_suffix(".postings"), "wb") as out_postings,
+    ):
+        dict_files = [
+            stack.enter_context(open(path.with_suffix(".dict"), "rb")) for path in paths
+        ]
+        postings_files = [
+            stack.enter_context(open(path.with_suffix(".postings"), "r+b"))
+            for path in paths
+        ]
+
+        dict_readers = [DictReader(file) for file in dict_files]
+        q1: list[tuple[str, int, DictEntry]] = []
+
+        for i, reader in enumerate(dict_readers):
+            if entry := reader.next():
+                q1.append((entry.term, i, entry))
+
+        heapq.heapify(q1)
+
+        while len(q1) > 0:
+            term, i, entry = heapq.heappop(q1)
+
+            if next_entry := dict_readers[i].next():
+                heapq.heappush(q1, (next_entry.term, i, next_entry))
+
+            merge_items = [(i, entry)]
+
+            # Consider other local dicts on the same term
+            while len(q1) > 0 and q1[0][0] == term:
+                _, i, entry = heapq.heappop(q1)
+
+                if next_entry := dict_readers[i].next():
+                    heapq.heappush(q1, (next_entry.term, i, next_entry))
+
+                merge_items.append((i, entry))
+
+            posting_readers = [
+                PostingsReader(postings_files[i], entry.len, entry.offset)
+                for i, entry in merge_items
+            ]
+
+            q2: list[tuple[DocId, int, PostingsEntry]] = []
+
+            for i, reader in enumerate(posting_readers):
+                if entry := reader.next():
+                    q2.append((entry.doc_id, i, entry))
+
+            heapq.heapify(q2)
+
+            offset = out_postings.tell()
+            total_postings = 0
+
+            while len(q2) > 0:
+                doc_id, i, entry = heapq.heappop(q2)
+                total_tf = entry.tf
+
+                if entry := posting_readers[i].next():
+                    heapq.heappush(q2, (entry.doc_id, i, entry))
+
+                # Consider other postings with same doc_id
+                while len(q2) > 0 and q2[0][0] == doc_id:
+                    _, i, entry_extra = heapq.heappop(q2)
+
+                    if entry := posting_readers[i].next():
+                        heapq.heappush(q2, (entry.doc_id, i, entry))
+
+                    total_tf += entry_extra.tf
+
+                out_entry = PostingsEntry(doc_id=doc_id, tf=total_tf)
+                _ = out_postings.write(out_entry.pack())
+                total_postings += 1
+
+            out_dict_entry = DictEntry(term=term, offset=offset, len=total_postings)
+            _ = out_dict.write(out_dict_entry.pack())
+
+
+def merge_blocks(base_dir: Path, level: int, n_blocks: int, m: int) -> int:
+    while n_blocks > 1:
+        batches = itertools.batched(range(n_blocks), m)
+        n_blocks = 0
+
+        for i, batch in enumerate(batches):
+            merge_blocks_pass(base_dir, level, i, batch)
+            n_blocks += 1
+
+        level += 1
+
+    return level
+
+
+def spimi_index_construction(
+    doc_paths: list[Path],
+    language: str,
+    m: int,
+    out_dir: Path,
+    max_memory: int,
+) -> Path:
+    n = 0
+    token_stream = parse_docs(doc_paths, language)
+
+    while not token_stream.done():
+        print(f"Processing block {n}")
+
+        block_path = make_block_path(out_dir, 0, n)
+        spimi_invert(token_stream, block_path, max_memory)
+        n += 1
+
+    final_level = merge_blocks(out_dir, 0, n, m=m)
+    return make_block_path(out_dir, final_level, 0)
 
 
 def main():
     args = parse_args()
-    texts_dir: Path = args.texts_dir
 
-    if not texts_dir.exists():
-        raise Exception(f"texts folder does not exist: {texts_dir}")
+    language = cast(str, args.language)
+    texts_dir = cast(Path, args.texts_dir)
+    output_dir = cast(Path, args.output_dir)
+    merge_m = cast(int, args.merge_m)
+    max_memory = cast(int, args.max_memory)
 
-    filenames = sorted(path for path in texts_dir.iterdir() if path.suffix == ".txt")
-    if not filenames:
-        raise Exception(f"no .txt files found in {texts_dir}")
+    doc_filenames = os.listdir(texts_dir)
+    doc_paths = [texts_dir / filename for filename in doc_filenames]
 
-    print(f"Reading '{texts_dir}'...")
-    print(f"Found {len(filenames)} text files")
+    print(f"Found {len(doc_paths)} text files.")
 
-    use_stemming = not args.no_stemming
+    tmp_dir = output_dir / "tmp"
+    os.makedirs(tmp_dir, exist_ok=True)
 
-    print("Building vocabulary...")
-    terms, document_count = build_vocabulary_from_files(
-        filenames,
-        args.language,
-        args.min_token_len,
-        use_stemming,
-    )
-    if document_count == 0:
-        raise Exception("no text documents found")
-
-    print(f"Found {document_count} documents")
-
-    if not terms:
-        raise Exception("empty text vocabulary")
-
-    term_to_id = {term: i for i, term in enumerate(terms)}
-
-    tmp_dir = args.tmp_dir or args.output_dir / "tmp"
-
-    print("Building inverted index...")
-    os.makedirs(args.output_dir, exist_ok=True)
-    documents_writer = JsonArrayWriter(args.output_dir / "documents.json")
-
-    try:
-        block_files = build_spimi_block_files(
-            shared.text.yield_text_documents(filenames),
-            document_count,
-            term_to_id,
-            args.language,
-            args.min_token_len,
-            use_stemming,
-            args.block_size,
-            tmp_dir,
-            documents_writer,
-        )
-    finally:
-        documents_writer.close()
-
-    raw_files = merge_block_files(block_files, len(terms))
-
-    print("Computing TF-IDF weighted index...")
-    df, lengths = compute_weighted_index_files(
-        raw_files,
-        args.output_dir,
-        len(terms),
-        document_count,
+    print("Constructing inverted index with SPIMI...")
+    final_block_path = spimi_index_construction(
+        doc_paths,
+        language,
+        m=merge_m,
+        out_dir=tmp_dir,
+        max_memory=max_memory,
     )
 
-    print("Saving...")
-    save_outputs(args.output_dir, terms, df, lengths)
+    dict_path = output_dir / "index.dict"
+    postings_path = output_dir / "index.postings"
 
-    if not args.keep_tmp:
-        shutil.rmtree(tmp_dir, ignore_errors=True)
+    os.rename(final_block_path.with_suffix(".dict"), dict_path)
+    os.rename(final_block_path.with_suffix(".postings"), postings_path)
+    shutil.rmtree(tmp_dir, ignore_errors=True)
 
+    print("Weighing index with TF-IDF and calculating document lengths...")
+    with (
+        open(dict_path, "rb") as dict_file,
+        open(postings_path, "r+b") as postings_file,
+    ):
+        dict_reader = DictReader(dict_file)
+        n = len(doc_paths)
+
+        lengths = np.zeros(n)
+
+        while dict_entry := dict_reader.next():
+            postings = PostingsReader(postings_file, dict_entry.len, dict_entry.offset)
+
+            df = dict_entry.len
+
+            while posting := postings.next():
+                w = shared.weight(n, posting.tf, df)
+                lengths[posting.doc_id] += w**2
+
+                postings.step_back()
+                postings.write(PostingsEntry(doc_id=posting.doc_id, tf=w))
+
+        lengths = np.sqrt(lengths)
+
+    with open(output_dir / "files.json", "w") as f:
+        json.dump(doc_filenames, f)
+
+    np.save(output_dir / "lengths.npy", lengths)
     print("Done.")
 
 

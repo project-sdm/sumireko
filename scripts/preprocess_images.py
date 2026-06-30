@@ -33,7 +33,7 @@ def main():
 
         path = images_dir / filename
 
-        img = cv2.imread(path)
+        img = cv2.imread(path, cv2.IMREAD_GRAYSCALE)
         assert img is not None, f"Failed to load {path}"
         img = shared.image.downscale(img)
 
