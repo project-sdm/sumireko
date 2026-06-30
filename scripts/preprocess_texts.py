@@ -7,6 +7,7 @@ import shutil
 from contextlib import ExitStack
 from io import BufferedWriter
 from pathlib import Path
+from tempfile import TemporaryDirectory
 from typing import cast
 
 import numpy as np
@@ -282,24 +283,21 @@ def main():
 
     print(f"Found {len(doc_paths)} text files.")
 
-    tmp_dir = output_dir / "tmp"
-    os.makedirs(tmp_dir, exist_ok=True)
+    with TemporaryDirectory(dir=output_dir) as tmp_dir:
+        print("Constructing inverted index with SPIMI...")
+        final_block_path = spimi_index_construction(
+            doc_paths,
+            language,
+            m=merge_m,
+            out_dir=Path(tmp_dir),
+            max_memory=max_memory,
+        )
 
-    print("Constructing inverted index with SPIMI...")
-    final_block_path = spimi_index_construction(
-        doc_paths,
-        language,
-        m=merge_m,
-        out_dir=tmp_dir,
-        max_memory=max_memory,
-    )
+        dict_path = output_dir / "index.dict"
+        postings_path = output_dir / "index.postings"
 
-    dict_path = output_dir / "index.dict"
-    postings_path = output_dir / "index.postings"
-
-    os.rename(final_block_path.with_suffix(".dict"), dict_path)
-    os.rename(final_block_path.with_suffix(".postings"), postings_path)
-    shutil.rmtree(tmp_dir, ignore_errors=True)
+        os.rename(final_block_path.with_suffix(".dict"), dict_path)
+        os.rename(final_block_path.with_suffix(".postings"), postings_path)
 
     print("Weighing index with TF-IDF and calculating document lengths...")
     lengths = weight_postings(dict_path, postings_path, len(doc_paths))
