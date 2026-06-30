@@ -53,7 +53,11 @@ class TokenStream:
             self.cur_terms = deque(tokenize_text(text, language=self.language))
             term = self.cur_terms.popleft() if self.cur_terms else None
 
-        assert len(term) <= MAX_TERM_LEN
+        if len(term) > MAX_TERM_LEN:
+            term_trunc = term[:MAX_TERM_LEN]
+            print(f"[WARNIING] Truncating {term} to {term_trunc}")
+            term = term_trunc
+
         return Token(doc_id=self.next_doc - 1, term=term)
 
 
