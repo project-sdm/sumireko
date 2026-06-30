@@ -6,6 +6,7 @@ from cv2.typing import MatLike
 from fastapi import APIRouter, HTTPException, Request, UploadFile
 
 import app.common.algos as algos
+import shared.image
 from app.common.algos import SearchMode
 from app.common.state import AppState
 
@@ -19,6 +20,8 @@ async def extract_descriptors(state: AppState, file: UploadFile) -> MatLike:
     q_img = cv2.imdecode(q_nparr, cv2.IMREAD_GRAYSCALE)
     if q_img is None:
         raise HTTPException(status_code=400, detail="Could not read image")
+
+    q_img = shared.image.downscale(q_img)
 
     _, q_desc = state.sift.detectAndCompute(q_img, None)
 
