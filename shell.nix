@@ -3,7 +3,6 @@
 }:
 pkgs.mkShell {
   packages = with pkgs; [
-    ffmpeg
     (python314.withPackages (
       ps: with ps; [
         faiss
@@ -18,5 +17,7 @@ pkgs.mkShell {
         python-multipart
       ]
     ))
+    ffmpeg
+    xxd
   ];
 }
