@@ -1,7 +1,7 @@
 import os
-from dataclasses import dataclass
 from enum import Enum
 from pathlib import Path
+from typing import override
 
 import requests
 from shared.utils import load_env_or
@@ -9,10 +9,17 @@ from shared.utils import load_env_or
 BASE_URL = load_env_or("TEST_API_BASE_URL", "http://localhost:8000")
 
 
-@dataclass
 class SearchResult:
     results: list[str]
     time_ms: float
+
+    def __init__(self, obj):
+        self.results = obj["results"]
+        self.time_ms = obj["time_ms"]
+
+    @override
+    def __str__(self) -> str:
+        return f"{self.time_ms} ms\t- {self.results}"
 
 
 class SearchMode(str, Enum):
@@ -32,7 +39,7 @@ def request(path: Path, media_type: str, mode: str, k: int) -> SearchResult:
         raise Exception(f"Request failed: {req.json()}")
 
     obj = req.json()
-    return SearchResult(obj["results"], obj["time_ms"])
+    return SearchResult(obj)
 
 
 def run_test(
