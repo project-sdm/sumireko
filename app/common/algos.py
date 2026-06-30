@@ -35,21 +35,15 @@ def knn(
     n = len(data.media_files)
 
     scores: dict[int, float] = {}
-    query_len_sq = 0.0
 
     for word_id, tf_query in enumerate(q_hist):
         if tf_query == 0:
             continue
 
         w_query = shared.weight(n, tf_query, data.df[word_id])
-        query_len_sq += w_query**2
 
         for img_id, w_img in data.index[word_id]:
             scores[img_id] = scores.get(img_id, 0) + w_img * w_query
-
-    if query_len_sq == 0:
-        elapsed_ms = (time.perf_counter() - start) * 1000
-        return KnnResult([], round(elapsed_ms, 2))
 
     for img_id in scores:
         scores[img_id] /= data.lengths[img_id]
@@ -58,8 +52,7 @@ def knn(
     elapsed_ms = (time.perf_counter() - start) * 1000
 
     top_files = [data.media_files[i] for i, _ in result[:k]]
-
-    return KnnResult(top_files, round(elapsed_ms, 2))
+    return KnnResult(results=top_files, time_ms=round(elapsed_ms, 2))
 
 
 def knn_postgres(
