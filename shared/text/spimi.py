@@ -6,77 +6,13 @@ from pathlib import Path
 import spimi_cpp
 from shared.text.index import (
     DictEntry,
-    Dictionary,
     DictReader,
     DocId,
     PostingsEntry,
-    PostingsList,
     PostingsReader,
     make_block_path,
 )
-from shared.text.processing import TokenStream, parse_docs
-
-
-def _add_to_dictionary(dictionary: Dictionary, term: str) -> PostingsList:
-    dictionary[term] = []
-    return dictionary[term]
-
-
-def _get_posting_list(dictionary: Dictionary, term: str) -> PostingsList:
-    return dictionary[term]
-
-
-def _add_to_postings_list(postings_list: PostingsList, doc_id: DocId):
-    last = len(postings_list) - 1
-
-    if len(postings_list) > 0 and postings_list[last][0] == doc_id:
-        postings_list[last] = (doc_id, postings_list[last][1] + 1)
-    else:
-        postings_list.append((doc_id, 1))
-
-
-def _sort_terms(dictionary: Dictionary) -> list[str]:
-    return sorted(dictionary.keys())
-
-
-def _write_block_to_disk(
-    sorted_terms: list[str],
-    dictionary: Dictionary,
-    block_path: Path,
-):
-    postings_path = block_path.with_suffix(".postings")
-    dict_path = block_path.with_suffix(".dict")
-
-    with open(postings_path, "wb") as postings_file, open(dict_path, "wb") as dict_file:
-        for term in sorted_terms:
-            postings_list = _get_posting_list(dictionary, term)
-
-            offset = postings_file.tell()
-
-            for doc_id, tf in postings_list:
-                posting = PostingsEntry(doc_id=doc_id, value=tf)
-                _ = postings_file.write(posting.pack())
-
-            dict_entry = DictEntry(term=term, offset=offset, len=len(postings_list))
-            _ = dict_file.write(dict_entry.pack())
-
-
-def _spimi_invert(token_stream: TokenStream, block_path: Path, max_memory: int):
-    dictionary: Dictionary = {}
-    bytes_used = 0
-
-    while bytes_used < max_memory and (token := token_stream.next()):
-        if token.term not in dictionary:
-            postings_list = _add_to_dictionary(dictionary, token.term)
-            bytes_used += 16 + len(token.term)
-        else:
-            postings_list = _get_posting_list(dictionary, token.term)
-
-        _add_to_postings_list(postings_list, token.doc_id)
-        bytes_used += 56
-
-    sorted_terms = _sort_terms(dictionary)
-    _write_block_to_disk(sorted_terms, dictionary, block_path)
+from shared.text.processing import parse_docs
 
 
 def _merge_blocks_partial(base: Path, level: int, n: int, blocks: tuple[int, ...]):
@@ -193,7 +129,6 @@ def spimi_index_construction(
 
         block_path = make_block_path(out_dir, 0, n)
         spimi_cpp.spimi_invert(token_stream, str(block_path), max_memory)
-        # _spimi_invert(token_stream, block_path, max_memory)
         n += 1
 
     final_level = _merge_blocks(out_dir, 0, n, m=m)
