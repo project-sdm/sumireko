@@ -3,7 +3,7 @@ from typing import cast
 import cv2
 import numpy as np
 from cv2.typing import MatLike
-from fastapi import APIRouter, HTTPException, Request, UploadFile
+from fastapi import APIRouter, FastAPI, HTTPException, Request, UploadFile
 
 import app.common.algos as algos
 import shared.image
@@ -35,7 +35,8 @@ async def image_search(
     k: int = 5,
     mode: SearchMode = SearchMode.native,
 ):
-    state = cast(AppState, req.app.state)
+    app = cast(FastAPI, req.app)
+    state = cast(AppState, app.state)
     q_desc = await extract_descriptors(state, file)
 
     if mode == SearchMode.native:
