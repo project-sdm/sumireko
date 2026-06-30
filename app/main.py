@@ -1,10 +1,12 @@
 import json
 from contextlib import asynccontextmanager
 from pathlib import Path
+from typing import cast
 
 import cv2
 import faiss
 import numpy as np
+from cv2.typing import MatLike
 from faiss import IndexFlatL2
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
@@ -21,17 +23,19 @@ from app.images.router import image_router
 def load_preprocessed(label: str, data_dir: Path) -> PreprocessedData:
     APP_LOGGER.info(f"[{label}] Loading preprocessed data...")
 
-    words = np.load(data_dir / "words.npy")
-    df = np.load(data_dir / "df.npy")
-    lengths = np.load(data_dir / "lengths.npy")
+    words = cast(MatLike, np.load(data_dir / "words.npy"))
+    df = cast(np.ndarray, np.load(data_dir / "df.npy"))
+    lengths = cast(np.ndarray, np.load(data_dir / "lengths.npy"))
 
-    word_index: IndexFlatL2 = faiss.read_index(str(data_dir / "word_index.faiss"))
+    word_index: IndexFlatL2 = cast(
+        IndexFlatL2, faiss.read_index(str(data_dir / "word_index.faiss"))
+    )
 
     with open(data_dir / "media_files.json") as f:
-        media_files = json.load(f)
+        media_files = cast(list[str], json.load(f))
 
     with open(data_dir / "index.json") as f:
-        index = json.load(f)
+        index = cast(list[list[tuple[int, float]]], json.load(f))
 
     APP_LOGGER.info(f"[{label}] Loaded {len(media_files)} items, {len(words)} words.")
 
