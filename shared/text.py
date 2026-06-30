@@ -1,8 +1,8 @@
 import functools
 import re
 import string
-from collections.abc import Iterator
 from collections import Counter
+from collections.abc import Iterator
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -32,10 +32,6 @@ def read_text_file(path: Path) -> str:
 def yield_text_documents(paths: list[Path]) -> Iterator[TextDocument]:
     for path in paths:
         yield TextDocument(path.name, read_text_file(path))
-
-
-def iter_text_documents(paths: list[Path]) -> list[TextDocument]:
-    return list(yield_text_documents(paths))
 
 
 def get_stopwords(language: str) -> set[str]:
