@@ -48,7 +48,7 @@ async def extract_descriptors(file: UploadFile) -> MatLike:
 async def audio_search(
     req: Request,
     file: UploadFile,
-    k: int = 5,
+    k: int = 10,
     mode: SearchMode = SearchMode.native,
 ):
     app = cast(FastAPI, req.app)
