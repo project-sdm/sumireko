@@ -72,7 +72,7 @@ def get_stopwords(language: str) -> set[str]:
 
 def tokenize_text(
     text: str,
-    language: str = "spanish",
+    language: str = "english",
 ) -> list[str]:
     stopwords = get_stopwords(language)
     stemmer = _build_stemmer(language)
@@ -157,15 +157,15 @@ class PostingsEntry:
     PACK_SIZE: ClassVar[int] = struct.calcsize(PACK_FMT)
 
     doc_id: DocId
-    tf: float
+    value: float
 
     def pack(self) -> bytes:
-        return struct.pack(self.PACK_FMT, self.doc_id, self.tf)
+        return struct.pack(self.PACK_FMT, self.doc_id, self.value)
 
     @classmethod
     def unpack(cls, data: bytes):
-        doc_id, tf = struct.unpack(cls.PACK_FMT, data)  # pyright: ignore[reportAny]
-        return cls(doc_id=doc_id, tf=tf)  # pyright: ignore[reportAny]
+        doc_id, value = struct.unpack(cls.PACK_FMT, data)  # pyright: ignore[reportAny]
+        return cls(doc_id=doc_id, value=value)  # pyright: ignore[reportAny]
 
 
 class PostingsReader:

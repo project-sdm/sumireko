@@ -76,7 +76,7 @@ class PostingsWriter:
         self.file = file
 
     def write_posting(self, doc_id: int, tf: int):
-        entry = PostingsEntry(doc_id=doc_id, tf=tf)
+        entry = PostingsEntry(doc_id=doc_id, value=tf)
         _ = self.file.write(entry.pack())
 
 
@@ -95,7 +95,7 @@ def write_block_to_disk(
             offset = postings_file.tell()
 
             for doc_id, tf in postings_list:
-                posting = PostingsEntry(doc_id=doc_id, tf=tf)
+                posting = PostingsEntry(doc_id=doc_id, value=tf)
                 _ = postings_file.write(posting.pack())
 
             dict_entry = DictEntry(term=term, offset=offset, len=len(postings_list))
@@ -187,7 +187,7 @@ def merge_blocks_pass(base: Path, level: int, n: int, blocks: tuple[int, ...]):
 
             while len(q2) > 0:
                 doc_id, i, entry = heapq.heappop(q2)
-                total_tf = entry.tf
+                total_tf = entry.value
 
                 if entry := posting_readers[i].next():
                     heapq.heappush(q2, (entry.doc_id, i, entry))
@@ -199,9 +199,9 @@ def merge_blocks_pass(base: Path, level: int, n: int, blocks: tuple[int, ...]):
                     if entry := posting_readers[i].next():
                         heapq.heappush(q2, (entry.doc_id, i, entry))
 
-                    total_tf += entry_extra.tf
+                    total_tf += entry_extra.value
 
-                out_entry = PostingsEntry(doc_id=doc_id, tf=total_tf)
+                out_entry = PostingsEntry(doc_id=doc_id, value=total_tf)
                 _ = out_postings.write(out_entry.pack())
                 total_postings += 1
 
@@ -293,11 +293,11 @@ def main():
             df = dict_entry.len
 
             while posting := postings.next():
-                w = shared.weight(n, posting.tf, df)
+                w = shared.weight(n, posting.value, df)
                 lengths[posting.doc_id] += w**2
 
                 postings.step_back()
-                postings.write(PostingsEntry(doc_id=posting.doc_id, tf=w))
+                postings.write(PostingsEntry(doc_id=posting.doc_id, value=w))
 
         lengths = np.sqrt(lengths)
 
