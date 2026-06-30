@@ -1,4 +1,3 @@
-import math
 import time
 from dataclasses import dataclass
 from enum import Enum
@@ -7,7 +6,7 @@ import numpy as np
 from psycopg import Connection
 
 import shared
-from app.common.state import PreprocessedData
+from app.common.state import PreprocessedMediaData
 
 
 class SearchMode(str, Enum):
@@ -23,7 +22,11 @@ class KnnResult:
     time_ms: float
 
 
-def knn(descriptors: np.ndarray, data: PreprocessedData, k: int | None) -> KnnResult:
+def knn(
+    descriptors: np.ndarray,
+    data: PreprocessedMediaData,
+    k: int | None,
+) -> KnnResult:
     start = time.perf_counter()
 
     _, labels = data.word_index.search(descriptors, 1)
@@ -63,7 +66,7 @@ def knn_postgres(
     conn: Connection,
     table_name: str,
     descriptors: np.ndarray,
-    data: PreprocessedData,
+    data: PreprocessedMediaData,
     k: int,
     mode: SearchMode,
 ) -> KnnResult:
@@ -80,7 +83,6 @@ def knn_postgres(
     hist = compute_query_histogram(descriptors, data)
 
     with conn.cursor() as cur:
-
         _ = cur.execute(
             f"select filename from {table_name} order by {column} <=> %s limit %s",
             (str(hist), k),
@@ -96,7 +98,7 @@ def knn_postgres(
 
 def compute_query_histogram(
     descriptors: np.ndarray,
-    data: PreprocessedData,
+    data: PreprocessedMediaData,
 ) -> list[float]:
     _, labels = data.word_index.search(descriptors, 1)
     q_hist = np.bincount(labels.ravel(), minlength=len(data.words))

@@ -10,7 +10,14 @@ from starlette.datastructures import State
 
 
 @dataclass
-class PreprocessedData:
+class PreprocessedTextData:
+    files: list[str]
+    index: dict[str, list[tuple[int, float]]]
+    lengths: npt.NDArray[np.float32]
+
+
+@dataclass
+class PreprocessedMediaData:
     media_files: list[str]
     word_index: faiss.IndexFlatL2
     words: MatLike
@@ -22,6 +29,7 @@ class PreprocessedData:
 @dataclass
 class AppState(State):
     sift: cv2.SIFT
-    image_data: PreprocessedData
-    audio_data: PreprocessedData
+    text_data: PreprocessedTextData
+    image_data: PreprocessedMediaData
+    audio_data: PreprocessedMediaData
     db: ConnectionPool
