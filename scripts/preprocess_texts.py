@@ -34,7 +34,7 @@ def parse_args() -> argparse.Namespace:
         default="english",
     )
     _ = parser.add_argument("--merge-m", type=int, default=10)
-    _ = parser.add_argument("--max-memory", type=int, default=2**12)
+    _ = parser.add_argument("--max-memory", type=int, default=2**20)
     return parser.parse_args()
 
 
