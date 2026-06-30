@@ -1,6 +1,6 @@
 import os
 
-from app.common.exceptions import MissingEnvVariableException
+from shared.exceptions import MissingEnvVariableException
 
 
 def load_env(var: str) -> str:
