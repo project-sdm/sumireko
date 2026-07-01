@@ -25,7 +25,7 @@ async def extract_descriptors(state: AppState, file: UploadFile) -> MatLike:
 
     _, q_desc = state.sift.detectAndCompute(q_img, None)
 
-    if not q_desc:
+    if q_desc is None or len(q_desc) == 0:
         raise HTTPException(status_code=400, detail="No features detected in image")
 
     return q_desc
