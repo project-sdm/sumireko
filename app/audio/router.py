@@ -27,16 +27,19 @@ async def extract_descriptors(file: UploadFile) -> MatLike:
 
     q_audio = np.append(q_audio[0], q_audio[1:] - PRE_EMPHASIS * q_audio[:-1])
 
-    q_desc = librosa.feature.mfcc(
-        y=q_audio,
-        sr=sr,
-        n_mfcc=13,
-        n_fft=int(0.025 * sr),
-        win_length=int(0.025 * sr),
-        hop_length=int(0.010 * sr),
-        window="hamming",
-        center=False,
-    ).T
+    try:
+        q_desc = librosa.feature.mfcc(
+            y=q_audio,
+            sr=sr,
+            n_mfcc=13,
+            n_fft=int(0.025 * sr),
+            win_length=int(0.025 * sr),
+            hop_length=int(0.010 * sr),
+            window="hamming",
+            center=False,
+        ).T
+    except Exception:
+        raise HTTPException(status_code=400, detail="Audio too short to extract MFCCs")
 
     if len(q_desc) == 0:
         raise HTTPException(status_code=400, detail="Could not extract MFCCs")
