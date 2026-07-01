@@ -42,7 +42,7 @@ class TokenStream:
             if self.next_doc >= len(self.doc_paths):
                 return None
 
-            text = self.doc_paths[self.next_doc].read_text()
+            text = self.doc_paths[self.next_doc].read_text(encoding="utf-8")
             self.next_doc += 1
 
             self.cur_terms = deque(tokenize_text(text, language=self.language))

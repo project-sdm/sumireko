@@ -114,7 +114,7 @@ def init_text(texts_dir: Path, table_name: str, language: str = "english"):
                 copy {table_name:i} (filename, content) from stdin
                 """) as copy:
                 for filename in text_files:
-                    content = filename.read_text()
+                    content = filename.read_text(encoding="utf-8")
                     copy.write_row((filename.name, content))
 
             conn.commit()
