@@ -7,7 +7,7 @@ from fastapi import APIRouter, FastAPI, HTTPException, Request, UploadFile
 
 import app.common.algos as algos
 import shared.image
-from app.common.algos import SearchMode
+from app.common.algos import MediaSearchMode
 from app.common.state import AppState
 
 image_router = APIRouter(prefix="/images", tags=["images"])
@@ -33,13 +33,13 @@ async def image_search(
     req: Request,
     file: UploadFile,
     k: int = 10,
-    mode: SearchMode = SearchMode.native,
+    mode: MediaSearchMode = MediaSearchMode.native,
 ):
     app = cast(FastAPI, req.app)
     state = cast(AppState, app.state)
     q_desc = await extract_descriptors(state, file)
 
-    if mode == SearchMode.native:
+    if mode == MediaSearchMode.native:
         return algos.knn(q_desc, state.image_data, k)
 
     with state.db.connection() as conn:

@@ -9,7 +9,7 @@ import shared
 from app.common.state import PreprocessedMediaData
 
 
-class SearchMode(str, Enum):
+class MediaSearchMode(str, Enum):
     native = "native"
     pg_brute = "pg-brute"
     pg_ivf = "pg-ivf"
@@ -61,14 +61,14 @@ def knn_postgres(
     descriptors: np.ndarray,
     data: PreprocessedMediaData,
     k: int,
-    mode: SearchMode,
+    mode: MediaSearchMode,
 ) -> KnnResult:
-    assert mode != SearchMode.native
+    assert mode != MediaSearchMode.native
 
     COLUMNS = {
-        SearchMode.pg_brute: "histogram_brute",
-        SearchMode.pg_ivf: "histogram_ivf",
-        SearchMode.pg_hnsw: "histogram_hnsw",
+        MediaSearchMode.pg_brute: "histogram_brute",
+        MediaSearchMode.pg_ivf: "histogram_ivf",
+        MediaSearchMode.pg_hnsw: "histogram_hnsw",
     }
     column = COLUMNS[mode]
 

@@ -7,7 +7,7 @@ from cv2.typing import MatLike
 from fastapi import APIRouter, FastAPI, HTTPException, Request, UploadFile
 
 import app.common.algos as algos
-from app.common.algos import SearchMode
+from app.common.algos import MediaSearchMode
 from app.common.state import AppState
 
 audio_router = APIRouter(prefix="/audio", tags=["audio"])
@@ -49,13 +49,13 @@ async def audio_search(
     req: Request,
     file: UploadFile,
     k: int = 10,
-    mode: SearchMode = SearchMode.native,
+    mode: MediaSearchMode = MediaSearchMode.native,
 ):
     app = cast(FastAPI, req.app)
     state = cast(AppState, app.state)
     q_desc = await extract_descriptors(file)
 
-    if mode == SearchMode.native:
+    if mode == MediaSearchMode.native:
         return algos.knn(q_desc, state.audio_data, k)
 
     with state.db.connection() as conn:
