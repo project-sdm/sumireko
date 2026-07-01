@@ -30,10 +30,11 @@ class SearchMode(str, Enum):
 
 
 def request(path: Path, media_type: str, mode: str, k: int) -> SearchResult:
-    req = requests.post(
-        f"{BASE_URL}/{media_type}/search?mode={mode}&k={k}",
-        files={"file": open(path, "rb")},
-    )
+    with open(path, "rb") as f:
+        req = requests.post(
+            f"{BASE_URL}/{media_type}/search?mode={mode}&k={k}",
+            files={"file": f},
+        )
 
     if not req.ok:
         raise Exception(f"Request failed: {req.json()}")
