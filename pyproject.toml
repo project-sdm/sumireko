@@ -19,6 +19,7 @@ dependencies = [
 requires = [
     "setuptools",
     "pybind11",
+    "pybind11-stubgen",
 ]
 build-backend = "setuptools.build_meta"
 
