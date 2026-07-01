@@ -1,6 +1,6 @@
 import time
 from collections import Counter
-from typing import cast
+from typing import Literal, cast
 
 from fastapi import APIRouter, FastAPI, Request
 
@@ -42,7 +42,7 @@ async def text_search(
     req: Request,
     q: str,
     k: int = 10,
-    language: str = "english",
+    language: Literal["english", "spanish", "multilingual"] = "english",
     mode: TextSearchMode = TextSearchMode.native,
 ):
     app = cast(FastAPI, req.app)
