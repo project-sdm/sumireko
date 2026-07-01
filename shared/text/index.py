@@ -29,8 +29,8 @@ class DictEntry:
 
     @classmethod
     def unpack(cls, data: bytes):
-        term, offset, len = struct.unpack(cls.PACK_FMT, data)
-        return cls(term=term.decode().rstrip("\x00"), offset=offset, len=len)
+        term, offset, postings_len = struct.unpack(cls.PACK_FMT, data)
+        return cls(term=term.decode().rstrip("\x00"), offset=offset, len=postings_len)
 
 
 @dataclass
