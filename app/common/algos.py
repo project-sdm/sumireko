@@ -69,10 +69,9 @@ def knn_postgres(
     hist = compute_query_histogram(descriptors, data)
 
     with conn.cursor() as cur:
-        _ = cur.execute(
-            f"select filename from {table_name} order by {column} <=> %s limit %s",
-            (str(hist), k),
-        )
+        _ = cur.execute(t"""
+            select filename from {table_name:i} order by {column:i} <=> {str(hist):l} limit {k:l}
+            """)
         rows = cur.fetchall()
         elapsed_ms = (time.perf_counter() - start) * 1000
 
