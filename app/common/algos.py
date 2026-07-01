@@ -9,6 +9,11 @@ import shared
 from app.common.state import PreprocessedMediaData
 
 
+class TextSearchMode(str, Enum):
+    native = "native"
+    pg = "pg"
+
+
 class MediaSearchMode(str, Enum):
     native = "native"
     pg_brute = "pg-brute"
