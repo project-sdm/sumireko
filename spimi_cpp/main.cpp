@@ -102,19 +102,11 @@ struct StringHash {
     }
 };
 
-struct StringEqual {
-    using is_transparent = void;
-
-    bool operator()(std::string_view a, std::string_view b) const {
-        return a == b;
-    }
-};
-
 using Term = std::basic_string<char, std::char_traits<char>, TrackingAllocator<char>>;
 using PostingsList = std::vector<Posting, TrackingAllocator<Posting>>;
 using DictEntry = std::pair<const Term, PostingsList>;
-using Dictionary =
-    std::unordered_map<Term, PostingsList, StringHash, StringEqual, TrackingAllocator<DictEntry>>;
+using Dictionary = std::
+    unordered_map<Term, PostingsList, StringHash, std::equal_to<>, TrackingAllocator<DictEntry>>;
 
 void add_to_postings_list(PostingsList& postings_list, DocId doc_id) {
     if (!postings_list.empty() && postings_list.back().doc_id == doc_id)
