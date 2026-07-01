@@ -1,10 +1,10 @@
 import os
-from enum import Enum
 from pathlib import Path
 from random import shuffle
 from typing import override
 
 import requests
+from shared.types import MediaSearchMode
 from shared.utils import load_env_or
 
 BASE_URL = load_env_or("TEST_API_BASE_URL", "http://localhost:8000")
@@ -23,14 +23,7 @@ class SearchResult:
         return f"{self.time_ms} ms\t- {self.results}"
 
 
-class SearchMode(str, Enum):
-    native = "native"
-    pg_brute = "pg-brute"
-    pg_ivf = "pg-ivf"
-    pg_hnsw = "pg-hnsw"
-
-
-def request(path: Path, media_type: str, mode: str, k: int) -> SearchResult:
+def request_media(path: Path, media_type: str, mode: str, k: int) -> SearchResult:
     with open(path, "rb") as f:
         req = requests.post(
             f"{BASE_URL}/{media_type}/search?mode={mode}&k={k}",
@@ -44,7 +37,7 @@ def request(path: Path, media_type: str, mode: str, k: int) -> SearchResult:
     return SearchResult(obj)
 
 
-def run_test(
+def run_media_test(
     media_dir: Path, media_type: str, modes: list[str], n_files: int | None, k: int
 ) -> dict[str, float]:
     filenames = os.listdir(media_dir)
@@ -58,7 +51,7 @@ def run_test(
 
         print(f"file path: {path}")
         for mode in modes:
-            res = request(path, media_type, mode, k)
+            res = request_media(path, media_type, mode, k)
             result[mode] = result.get(mode, 0.0) + res.time_ms
 
             print(f"[{mode}] {res}")
@@ -67,7 +60,7 @@ def run_test(
     return {k: (v / n_files) for k, v in result.items()}
 
 
-def bench(
+def bench_media(
     media_dir: Path,
     media_type: str,
     n_iters: int,
@@ -75,11 +68,11 @@ def bench(
     k: int,
 ) -> dict[str, float]:
 
-    modes = [mode.value for mode in SearchMode]
+    modes = [mode.value for mode in MediaSearchMode]
     bench_res = dict[str, float]()
 
     for _ in range(n_iters):
-        res = run_test(media_dir, media_type, modes, n_files, k)
+        res = run_media_test(media_dir, media_type, modes, n_files, k)
 
         for mode in modes:
             bench_res[mode] = bench_res.get(mode, 0.0) + res[mode]

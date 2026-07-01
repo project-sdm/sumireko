@@ -5,10 +5,11 @@ from typing import Literal, cast
 from fastapi import APIRouter, FastAPI, Query, Request
 
 import shared
-from app.common.algos import KnnResult, TextSearchMode
+from app.common.algos import KnnResult
 from app.common.state import AppState
 from shared.text.index import DictEntry, DictReader, DocId, PostingsReader
 from shared.text.processing import tokenize_text
+from shared.types import TextSearchMode
 
 text_router = APIRouter(prefix="/text", tags=["text"])
 

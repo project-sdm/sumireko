@@ -1,24 +1,12 @@
 import time
 from dataclasses import dataclass
-from enum import Enum
 
 import numpy as np
 from psycopg import Connection
 
 import shared
 from app.common.state import PreprocessedMediaData
-
-
-class TextSearchMode(str, Enum):
-    native = "native"
-    pg = "pg"
-
-
-class MediaSearchMode(str, Enum):
-    native = "native"
-    pg_brute = "pg-brute"
-    pg_ivf = "pg-ivf"
-    pg_hnsw = "pg-hnsw"
+from shared.types import MediaSearchMode
 
 
 @dataclass

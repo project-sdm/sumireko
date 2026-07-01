@@ -7,8 +7,8 @@ from fastapi import APIRouter, FastAPI, HTTPException, Query, Request, UploadFil
 
 import app.common.algos as algos
 import shared.image
-from app.common.algos import MediaSearchMode
 from app.common.state import AppState
+from shared.types import MediaSearchMode
 
 image_router = APIRouter(prefix="/images", tags=["images"])
 

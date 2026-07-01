@@ -3,7 +3,7 @@ from pathlib import Path
 from pprint import pprint
 from typing import cast
 
-from tests.lib import bench
+from tests.lib import bench_media
 
 
 def parse_args() -> tuple[Path, str, int, int | None, int]:
@@ -29,7 +29,7 @@ def parse_args() -> tuple[Path, str, int, int | None, int]:
 def main():
     media_dir, media_type, n_iters, n_files, k = parse_args()
 
-    results = bench(media_dir, media_type, n_iters, n_files, k)
+    results = bench_media(media_dir, media_type, n_iters, n_files, k)
     pprint(results)
 
 

@@ -7,8 +7,8 @@ from cv2.typing import MatLike
 from fastapi import APIRouter, FastAPI, HTTPException, Query, Request, UploadFile
 
 import app.common.algos as algos
-from app.common.algos import MediaSearchMode
 from app.common.state import AppState
+from shared.types import MediaSearchMode
 
 audio_router = APIRouter(prefix="/audio", tags=["audio"])
 
