@@ -22,13 +22,15 @@ class TokenStream:
     doc_paths: list[Path]
     language: str
     stopwords: set[str]
-    next_doc: int = 0
-    cur_terms: deque[str] = deque()
+    next_doc: int
+    cur_terms: deque[str]
 
     def __init__(self, doc_paths: list[Path], language: str):
         self.doc_paths = doc_paths
         self.language = language
         self.stopwords = _library_stopwords(language)
+        self.next_doc = 0
+        self.cur_terms = deque()
 
     def done(self) -> bool:
         return not self.cur_terms and self.next_doc >= len(self.doc_paths)
