@@ -3,7 +3,7 @@ import itertools
 from contextlib import ExitStack
 from pathlib import Path
 
-import spimi_cpp
+from shared.text import _spimi_cpp
 from shared.text.index import (
     DictEntry,
     DictReader,
@@ -128,7 +128,7 @@ def spimi_index_construction(
         print(f"Processing block {n}...")
 
         block_path = make_block_path(out_dir, 0, n)
-        spimi_cpp.spimi_invert(token_stream, str(block_path), max_memory)
+        _spimi_cpp.spimi_invert(token_stream, str(block_path), max_memory)
         n += 1
 
     final_level = _merge_blocks(out_dir, 0, n, m=m)

@@ -197,6 +197,6 @@ void spimi_invert(py::object token_stream_obj, std::string block_path, std::size
     write_block_to_disk(sorted_terms, dictionary, block_path);
 }
 
-PYBIND11_MODULE(spimi_cpp, m) {
+PYBIND11_MODULE(_spimi_cpp, m) {
     m.def("spimi_invert", &spimi_invert);
 }

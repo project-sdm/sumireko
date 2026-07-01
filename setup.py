@@ -1,12 +1,15 @@
 import subprocess
 import sys
+from pathlib import Path
 
 from pybind11.setup_helpers import Pybind11Extension, build_ext
 from setuptools import setup
 
+MODULE_NAME = "shared.text._spimi_cpp"
+
 ext_modules = [
     Pybind11Extension(
-        "spimi_cpp",
+        MODULE_NAME,
         [
             "spimi_cpp/main.cpp",
         ],
@@ -16,18 +19,18 @@ ext_modules = [
 
 
 class CustomBuildExt(build_ext):
-    def build_extension(self, ext):
-        super().build_extension(ext)
+    def run(self):
+        super().run()
+
+        output_dir = Path(".") if self.inplace else Path(self.build_lib)
         subprocess.run(
-            [sys.executable, "-m", "pybind11_stubgen", ext.name, "-o", "."],
+            [sys.executable, "-m", "pybind11_stubgen", MODULE_NAME, "-o", str(output_dir)],
             check=True,
         )
 
 
 _ = setup(
-    name="spimi_cpp",
     ext_modules=ext_modules,
     cmdclass={"build_ext": CustomBuildExt},
     zip_safe=False,
-    python_requires=">=3.14",
 )
