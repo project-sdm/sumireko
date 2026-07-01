@@ -18,7 +18,7 @@ def parse_args() -> tuple[Path, str, int, int | None, int]:
     args = parser.parse_args()
 
     return (
-        Path(cast(Path, args.media_dir)),
+        Path(cast(str, args.media_dir)),
         cast(str, args.media_type),
         cast(int, args.n_iters),
         cast(int | None, args.n_files),
