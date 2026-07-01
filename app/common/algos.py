@@ -47,11 +47,11 @@ def knn(
 
         w_query = shared.weight(n, tf_query, data.df[word_id])
 
-        for img_id, w_img in data.index[word_id]:
-            scores[img_id] = scores.get(img_id, 0) + w_img * w_query
+        for media_id, w_media in data.index[word_id]:
+            scores[media_id] = scores.get(media_id, 0) + w_media * w_query
 
-    for img_id in scores:
-        scores[img_id] /= data.lengths[img_id]
+    for media_id in scores:
+        scores[media_id] /= data.lengths[media_id]
 
     result = sorted(scores.items(), key=lambda tup: tup[1], reverse=True)
     elapsed_ms = (time.perf_counter() - start) * 1000
