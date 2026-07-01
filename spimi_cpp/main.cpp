@@ -18,31 +18,25 @@ namespace py = pybind11;
 
 class TrackingResource : public std::pmr::memory_resource {
 public:
-    TrackingResource()
-        : arena{std::pmr::new_delete_resource()} {}
-
     std::size_t bytes_used() const {
         return this->cur_bytes;
-    }
-
-    void release() {
-        arena.release();
-        cur_bytes = 0;
     }
 
 private:
     void* do_allocate(std::size_t bytes, std::size_t alignment) override {
         cur_bytes += bytes;
-        return arena.allocate(bytes, alignment);
+        return ::operator new(bytes, std::align_val_t(alignment));
     }
 
-    void do_deallocate(void*, std::size_t, std::size_t) override {}
+    void do_deallocate(void* p, std::size_t bytes, std::size_t alignment) override {
+        cur_bytes -= bytes;
+        ::operator delete(p, bytes, std::align_val_t(alignment));
+    }
 
     bool do_is_equal(const std::pmr::memory_resource& other) const noexcept override {
         return this == &other;
     }
 
-    std::pmr::monotonic_buffer_resource arena;
     std::size_t cur_bytes = 0;
 };
 
@@ -174,13 +168,14 @@ void spimi_invert(py::object token_stream_obj, std::string block_path, std::size
     std::optional<Token> token;
 
     TrackingResource mem_tracker;
+    std::pmr::unsynchronized_pool_resource mem_resource{&mem_tracker};
 
-    Dictionary dictionary{&mem_tracker};
+    Dictionary dictionary{&mem_resource};
 
     while (mem_tracker.bytes_used() < max_memory && (token = token_stream.next())) {
-        Term term{token->term, &mem_tracker};
+        Term term{token->term, &mem_resource};
 
-        auto [it, _] = dictionary.try_emplace(std::move(term), PostingsList{&mem_tracker});
+        auto [it, _] = dictionary.try_emplace(std::move(term), PostingsList{&mem_resource});
         add_to_postings_list(it->second, token->doc_id);
     }
 
