@@ -2,7 +2,7 @@ import time
 from collections import Counter
 from typing import Literal, cast
 
-from fastapi import APIRouter, FastAPI, Request
+from fastapi import APIRouter, FastAPI, Query, Request
 
 import shared
 from app.common.algos import KnnResult, TextSearchMode
@@ -40,8 +40,8 @@ def find_dict_entry(
 @text_router.get("/search")
 async def text_search(
     req: Request,
-    q: str,
-    k: int = 10,
+    q: str = Query(min_length=1),
+    k: int = Query(10, ge=1),
     language: Literal["english", "spanish", "multilingual"] = "english",
     mode: TextSearchMode = TextSearchMode.native,
 ):

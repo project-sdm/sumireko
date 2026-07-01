@@ -4,7 +4,7 @@ from typing import cast
 import librosa
 import numpy as np
 from cv2.typing import MatLike
-from fastapi import APIRouter, FastAPI, HTTPException, Request, UploadFile
+from fastapi import APIRouter, FastAPI, HTTPException, Query, Request, UploadFile
 
 import app.common.algos as algos
 from app.common.algos import MediaSearchMode
@@ -51,7 +51,7 @@ async def extract_descriptors(file: UploadFile) -> MatLike:
 async def audio_search(
     req: Request,
     file: UploadFile,
-    k: int = 10,
+    k: int = Query(10, ge=1),
     mode: MediaSearchMode = MediaSearchMode.native,
 ):
     app = cast(FastAPI, req.app)
