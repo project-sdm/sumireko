@@ -13,6 +13,10 @@ def init(data_dir: Path, table_name: str):
     histograms_path = data_dir / "histograms.npy"
     media_files_path = data_dir / "media_files.json"
 
+    if not histograms_path.is_file() or not media_files_path.is_file():
+        APP_LOGGER.warning(f"Preprocessed data not found in {data_dir}, skipping")
+        return
+
     hists: np.ndarray = np.load(str(histograms_path))
     with open(media_files_path) as f:
         filenames: list[str] = json.load(f)
@@ -79,6 +83,10 @@ def init(data_dir: Path, table_name: str):
 
 def init_text(texts_dir: Path, table_name: str, language: str = "english"):
     APP_LOGGER.info(f"Initializing {table_name} in Postgres...")
+
+    if not texts_dir.is_dir():
+        APP_LOGGER.warning(f"Directory {texts_dir} does not exist, skipping")
+        return
 
     text_files = list(texts_dir.iterdir())
     if len(text_files) == 0:
