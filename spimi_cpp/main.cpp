@@ -7,7 +7,7 @@
 #include <filesystem>
 #include <fstream>
 #include <functional>
-#include <iostream>
+#include <memory_resource>
 #include <optional>
 #include <string>
 #include <unordered_map>
@@ -16,28 +16,34 @@
 
 namespace py = pybind11;
 
-template<typename T>
-struct TrackingAllocator {
-    std::size_t& bytes;
+class TrackingResource : public std::pmr::memory_resource {
+public:
+    TrackingResource()
+        : arena{std::pmr::new_delete_resource()} {}
 
-    using value_type = T;
-
-    explicit TrackingAllocator(std::size_t& bytes)
-        : bytes{bytes} {}
-
-    template<typename U>
-    TrackingAllocator(const TrackingAllocator<U>& other)
-        : bytes{other.bytes} {}
-
-    value_type* allocate(std::size_t n) {
-        bytes += n * sizeof(value_type);
-        return static_cast<value_type*>(::operator new(n * sizeof(value_type)));
+    std::size_t bytes_used() const {
+        return this->cur_bytes;
     }
 
-    void deallocate(value_type* ptr, std::size_t n) {
-        bytes -= n * sizeof(value_type);
-        ::operator delete(ptr);
+    void release() {
+        arena.release();
+        cur_bytes = 0;
     }
+
+private:
+    void* do_allocate(std::size_t bytes, std::size_t alignment) override {
+        cur_bytes += bytes;
+        return arena.allocate(bytes, alignment);
+    }
+
+    void do_deallocate(void*, std::size_t, std::size_t) override {}
+
+    bool do_is_equal(const std::pmr::memory_resource& other) const noexcept override {
+        return this == &other;
+    }
+
+    std::pmr::monotonic_buffer_resource arena;
+    std::size_t cur_bytes = 0;
 };
 
 static constexpr std::size_t MAX_TERM_LEN = 23;
@@ -102,11 +108,9 @@ struct StringHash {
     }
 };
 
-using Term = std::basic_string<char, std::char_traits<char>, TrackingAllocator<char>>;
-using PostingsList = std::vector<Posting, TrackingAllocator<Posting>>;
-using DictEntry = std::pair<const Term, PostingsList>;
-using Dictionary = std::
-    unordered_map<Term, PostingsList, StringHash, std::equal_to<>, TrackingAllocator<DictEntry>>;
+using Term = std::pmr::string;
+using PostingsList = std::pmr::vector<Posting>;
+using Dictionary = std::pmr::unordered_map<Term, PostingsList, StringHash, std::equal_to<>>;
 
 void add_to_postings_list(PostingsList& postings_list, DocId doc_id) {
     if (!postings_list.empty() && postings_list.back().doc_id == doc_id)
@@ -169,19 +173,14 @@ void spimi_invert(py::object token_stream_obj, std::string block_path, std::size
     TokenStream token_stream{std::move(token_stream_obj)};
     std::optional<Token> token;
 
-    std::size_t bytes_used = 0;
+    TrackingResource mem_tracker;
 
-    // these allocators track how many bytes dictionary uses
-    TrackingAllocator<char> char_alloc{bytes_used};
-    TrackingAllocator<Posting> posting_alloc{bytes_used};
-    TrackingAllocator<DictEntry> dict_alloc{bytes_used};
+    Dictionary dictionary{&mem_tracker};
 
-    Dictionary dictionary{dict_alloc};
+    while (mem_tracker.bytes_used() < max_memory && (token = token_stream.next())) {
+        Term term{token->term, &mem_tracker};
 
-    while (bytes_used < max_memory && (token = token_stream.next())) {
-        Term term{token->term, char_alloc};
-
-        auto [it, _] = dictionary.try_emplace(std::move(term), PostingsList{posting_alloc});
+        auto [it, _] = dictionary.try_emplace(std::move(term), PostingsList{&mem_tracker});
         add_to_postings_list(it->second, token->doc_id);
     }
 
