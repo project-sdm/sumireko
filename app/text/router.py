@@ -4,10 +4,11 @@ from typing import cast
 
 from fastapi import APIRouter, FastAPI, Request
 
-import shared.text
-from app.common.algos import KnnResult
+import shared
+from app.common.algos import KnnResult, TextSearchMode
 from app.common.state import AppState
-from shared.text import DictEntry, DictReader, DocId, PostingsReader
+from shared.text.index import DictEntry, DictReader, DocId, PostingsReader
+from shared.text.processing import tokenize_text
 
 text_router = APIRouter(prefix="/text", tags=["text"])
 
@@ -37,19 +38,49 @@ def find_dict_entry(
 
 
 @text_router.get("/search")
-async def text_search(req: Request, q: str, k: int = 10, language: str = "english"):
+async def text_search(
+    req: Request,
+    q: str,
+    k: int = 10,
+    language: str = "english",
+    mode: TextSearchMode = TextSearchMode.native,
+):
     app = cast(FastAPI, req.app)
     state = cast(AppState, app.state)
+
+    if mode == "pg":
+        start = time.perf_counter()
+
+        with state.db.connection() as conn:
+            with conn.cursor() as cur:
+                _ = cur.execute(
+                    """
+                    with q as (select plainto_tsquery(%s, %s) as query)
+                    select filename from texts cross join q
+                    where content_tsv @@ q.query
+                    order by ts_rank(content_tsv, q.query) desc limit %s
+                    """,
+                    (language, q, k),
+                )
+                rows = cur.fetchall()
+
+        elapsed_ms = (time.perf_counter() - start) * 1000
+        return KnnResult(
+            results=[row[0] for row in rows],
+            time_ms=round(elapsed_ms, 2),
+        )
+
     data = state.text_data
 
     start = time.perf_counter()
-    tokens = Counter(shared.text.tokenize_text(q, language=language))
+    tokens = Counter(tokenize_text(q, language=language))
 
     n = len(data.files)
 
-    with open(data.dict_path, "rb") as dict_file, open(
-        data.postings_path, "r+b"
-    ) as postings_file:
+    with (
+        open(data.dict_path, "rb") as dict_file,
+        open(data.postings_path, "r+b") as postings_file,
+    ):
         dict_reader = DictReader(dict_file)
         dict_size = dict_reader.calc_size()
 
@@ -64,7 +95,7 @@ async def text_search(req: Request, q: str, k: int = 10, language: str = "englis
             w_query = shared.weight(n, tf_query, term_entry.len)
 
             while posting := postings.next():
-                if not posting.doc_id in scores:
+                if posting.doc_id not in scores:
                     scores[posting.doc_id] = 0
 
                 w_doc = posting.value
