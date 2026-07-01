@@ -26,9 +26,9 @@ def init(data_dir: Path, table_name: str):
             APP_LOGGER.info("Creating pgvector extension...")
             _ = cur.execute("create extension if not exists vector")
 
-            _ = cur.execute(
-                t"select exists (select 1 from information_schema.tables where table_name = {table_name})"
-            )
+            _ = cur.execute(t"""
+                select exists (select 1 from information_schema.tables where table_name = {table_name:l})
+                """)
             table_exists = (cur.fetchone() or [False])[0]
 
             if table_exists:
@@ -36,23 +36,21 @@ def init(data_dir: Path, table_name: str):
                 return
 
             APP_LOGGER.info("Creating schema...")
-            _ = cur.execute(
-                f"""
-                create table {table_name} (
+            _ = cur.execute(t"""
+                create table {table_name:i} (
                     id serial primary key,
                     filename varchar not null,
-                    histogram_brute vector({bow_len}),
-                    histogram_ivf   vector({bow_len}),
-                    histogram_hnsw  vector({bow_len})
+                    histogram_brute vector({bow_len:l}),
+                    histogram_ivf   vector({bow_len:l}),
+                    histogram_hnsw  vector({bow_len:l})
                 )
-                """
-            )
+                """)
 
             APP_LOGGER.info(f"Inserting {len(filenames)} rows...")
 
-            with cur.copy(
-                f"copy {table_name} (filename, histogram_brute, histogram_ivf, histogram_hnsw) from stdin"
-            ) as copy:
+            with cur.copy(t"""
+                copy {table_name:i} (filename, histogram_brute, histogram_ivf, histogram_hnsw) from stdin
+                """) as copy:
                 for i in range(len(filenames)):
                     vec_str = str(hists[i].tolist())
                     copy.write_row((filenames[i], vec_str, vec_str, vec_str))
@@ -61,23 +59,19 @@ def init(data_dir: Path, table_name: str):
 
             lists = 100
             APP_LOGGER.info(f"Building IVFFlat index (lists = {lists})...")
-            _ = cur.execute(
-                f"""
-                create index idx_{table_name}_ivf on {table_name}
-                using ivfflat (histogram_ivf vector_cosine_ops) with (lists = {lists})
-                """
-            )
+            _ = cur.execute(t"""
+                create index {f"idx_{table_name}_ivf":i} on {table_name:i}
+                using ivfflat (histogram_ivf vector_cosine_ops) with (lists = {lists:l})
+                """)
             conn.commit()
 
             m = 20
             ef = 40
             APP_LOGGER.info(f"Building HNSW index (m = {m}, ef_construction = {ef})...")
-            _ = cur.execute(
-                f"""
-                create index idx_{table_name}_hnsw on {table_name}
-                using hnsw (histogram_hnsw vector_cosine_ops) with (m = {m}, ef_construction = {ef})
-                """
-            )
+            _ = cur.execute(t"""
+                create index {f"idx_{table_name}_hnsw":i} on {table_name:i}
+                using hnsw (histogram_hnsw vector_cosine_ops) with (m = {m:l}, ef_construction = {ef:l})
+                """)
             conn.commit()
 
     APP_LOGGER.info("Done.")
@@ -95,9 +89,9 @@ def init_text(texts_dir: Path, table_name: str, language: str = "english"):
 
     with psycopg.connect() as conn:
         with conn.cursor() as cur:
-            _ = cur.execute(
-                t"select exists (select 1 from information_schema.tables where table_name = {table_name})"
-            )
+            _ = cur.execute(t"""
+                select exists (select 1 from information_schema.tables where table_name = {table_name:l})
+                """)
             table_exists = (cur.fetchone() or [False])[0]
 
             if table_exists:
@@ -105,20 +99,20 @@ def init_text(texts_dir: Path, table_name: str, language: str = "english"):
                 return
 
             APP_LOGGER.info("Creating schema...")
-            _ = cur.execute(
-                f"""
-                create table {table_name} (
+            _ = cur.execute(t"""
+                create table {table_name:i} (
                     id serial primary key,
                     filename varchar not null,
                     content text not null,
-                    content_tsv tsvector generated always as (to_tsvector('{language}', content)) stored
+                    content_tsv tsvector generated always as (to_tsvector({language:l}, content)) stored
                 )
-                """
-            )
+                """)
 
             APP_LOGGER.info(f"Inserting {len(text_files)} rows...")
 
-            with cur.copy(f"copy {table_name} (filename, content) from stdin") as copy:
+            with cur.copy(t"""
+                copy {table_name:i} (filename, content) from stdin
+                """) as copy:
                 for filename in text_files:
                     content = filename.read_text()
                     copy.write_row((filename.name, content))
@@ -126,9 +120,9 @@ def init_text(texts_dir: Path, table_name: str, language: str = "english"):
             conn.commit()
 
             APP_LOGGER.info("Building GIN index...")
-            _ = cur.execute(
-                f"create index idx_{table_name}_tsv on {table_name} using gin (content_tsv)"
-            )
+            _ = cur.execute(t"""
+                create index {f"idx_{table_name}_tsv":i} on {table_name:i} using gin (content_tsv)
+                """)
             conn.commit()
 
     APP_LOGGER.info("Done.")
