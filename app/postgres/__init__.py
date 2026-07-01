@@ -7,7 +7,7 @@ import psycopg
 from app.common.logger import APP_LOGGER
 
 
-def init(data_dir: Path, table_name:str):
+def init(data_dir: Path, table_name: str):
     APP_LOGGER.info(f"Initializing {table_name} in Postgres...")
 
     histograms_path = data_dir / "histograms.npy"
@@ -51,7 +51,7 @@ def init(data_dir: Path, table_name:str):
             APP_LOGGER.info(f"Inserting {len(filenames)} rows...")
 
             with cur.copy(
-                t"copy {table_name} (filename, histogram_brute, histogram_ivf, histogram_hnsw) from stdin"
+                f"copy {table_name} (filename, histogram_brute, histogram_ivf, histogram_hnsw) from stdin"
             ) as copy:
                 for i in range(len(filenames)):
                     vec_str = str(hists[i].tolist())
@@ -77,6 +77,57 @@ def init(data_dir: Path, table_name:str):
                 create index idx_{table_name}_hnsw on {table_name}
                 using hnsw (histogram_hnsw vector_cosine_ops) with (m = {m}, ef_construction = {ef})
                 """
+            )
+            conn.commit()
+
+    APP_LOGGER.info("Done.")
+
+
+def init_text(texts_dir: Path, table_name: str, language: str = "english"):
+    APP_LOGGER.info(f"Initializing {table_name} in Postgres...")
+
+    text_files = list(texts_dir.iterdir())
+    if len(text_files) == 0:
+        APP_LOGGER.warning(f"No files found in {texts_dir}")
+        return
+
+    APP_LOGGER.info(f"Found {len(text_files)} text files.")
+
+    with psycopg.connect() as conn:
+        with conn.cursor() as cur:
+            _ = cur.execute(
+                t"select exists (select 1 from information_schema.tables where table_name = {table_name})"
+            )
+            table_exists = (cur.fetchone() or [False])[0]
+
+            if table_exists:
+                APP_LOGGER.info(f"Table '{table_name}' already exists.")
+                return
+
+            APP_LOGGER.info("Creating schema...")
+            _ = cur.execute(
+                f"""
+                create table {table_name} (
+                    id serial primary key,
+                    filename varchar not null,
+                    content text not null,
+                    content_tsv tsvector generated always as (to_tsvector('{language}', content)) stored
+                )
+                """
+            )
+
+            APP_LOGGER.info(f"Inserting {len(text_files)} rows...")
+
+            with cur.copy(f"copy {table_name} (filename, content) from stdin") as copy:
+                for filename in text_files:
+                    content = filename.read_text()
+                    copy.write_row((filename.name, content))
+
+            conn.commit()
+
+            APP_LOGGER.info("Building GIN index...")
+            _ = cur.execute(
+                f"create index idx_{table_name}_tsv on {table_name} using gin (content_tsv)"
             )
             conn.commit()
 

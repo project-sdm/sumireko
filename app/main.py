@@ -18,6 +18,7 @@ async def lifespan(app: FastAPI):
     IMAGES_PATH = Path(".data/images")
     AUDIOS_PATH = Path(".data/audios")
 
+    postgres.init_text(Path("media/texts"), "texts")
     postgres.init(IMAGES_PATH, "images")
     postgres.init(AUDIOS_PATH, "audios")
 
