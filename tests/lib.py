@@ -1,6 +1,7 @@
 import os
 from enum import Enum
 from pathlib import Path
+from random import shuffle
 from typing import override
 
 import requests
@@ -47,13 +48,12 @@ def run_test(
     media_dir: Path, media_type: str, modes: list[str], n_files: int | None, k: int
 ) -> dict[str, float]:
     filenames = os.listdir(media_dir)
+    shuffle(filenames)
+    filenames = filenames[:n_files] if n_files is not None else filenames
 
     result = dict[str, float]()
 
-    for i, filename in enumerate(filenames):
-        if n_files is not None and i == n_files:
-            break
-
+    for filename in filenames:
         path = media_dir / filename
 
         print(f"file path: {path}")
