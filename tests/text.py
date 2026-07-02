@@ -1,28 +1,32 @@
 import argparse
-from pathlib import Path
 from pprint import pprint
 from typing import cast
 
-from tests.lib import MediaBenchParams, bench
+from tests.lib import TextBenchParams, bench
 
 
-def parse_args() -> MediaBenchParams:
+def parse_args() -> TextBenchParams:
     parser = argparse.ArgumentParser()
 
-    _ = parser.add_argument("media_dir", type=str)
-    _ = parser.add_argument("media_type", choices=["images", "audio"], type=str)
+    _ = parser.add_argument("query", type=str)
     _ = parser.add_argument("-i", "--n_iters", default=4, type=int)
-    _ = parser.add_argument("-n", "--n_files", default=None, type=int)
     _ = parser.add_argument("-k", "--k", default=5, type=int)
+
+    _ = parser.add_argument(
+        "-l",
+        "--language",
+        choices=["english", "spanish", "multilingual"],
+        default="english",
+        type=str,
+    )
 
     args = parser.parse_args()
 
-    return MediaBenchParams(
-        Path(cast(str, args.media_dir)),
-        cast(str, args.media_type),
+    return TextBenchParams(
+        cast(str, args.query),
         cast(int, args.n_iters),
-        cast(int | None, args.n_files),
         cast(int, args.k),
+        cast(str, args.language),
     )
 
 
